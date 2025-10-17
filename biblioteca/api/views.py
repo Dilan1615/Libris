@@ -1,3 +1,3 @@
 from django.shortcuts import render
 
-#Creacion de vistas
+# Create your views here.
