@@ -1,18 +1,5 @@
 from django.db import models
-from django.contrib.auth.hashers import make_password
-from django.contrib.contenttypes.fields import GenericForeignKey
-from django.contrib.contenttypes.models import ContentType
-# ----------------------------
-# Enums
-# ----------------------------
-class Estado(models.TextChoices):
-    ACTIVO = 'A', 'ACTIVO'
-    INACTIVO = 'I', 'INACTIVO'
-    SUSPENDIDO = 'S', 'SUSPENDIDO'
-
-class Rol(models.TextChoices):
-    ADMINISTRADOR = 'AD', 'ADMINISTRADOR'
-    USUARIO = 'US', 'USUARIO'
+from django.contrib.auth.models import AbstractUser
 
 class Genero(models.TextChoices):
     FICCION = 'FICCION', 'FICCION'
@@ -28,91 +15,74 @@ class Genero(models.TextChoices):
     COMEDIA = 'COMEDIA', 'COMEDIA'
     DRAMA = 'DRAMA', 'DRAMA'
     CIENCIAS = 'CIENCIAS', 'CIENCIAS'
+    
+
 
 class EstadoLectura(models.TextChoices):
-    LEYENDO = 'LEYENDO', 'LEYENDO'
-    PENDIENTE = 'PENDIENTE', 'PENDIENTE'
-    TERMINADO = 'TERMINADO', 'TERMINADO'
-    ABANDONADO = 'ABANDONADO', 'ABANDONADO'
+    LEIDO = 'LEIDO', 'Leido'
+    PENDIENTE = 'PENDIENTE', 'Pendiente'
+    FAVORITO = 'FAVORITO', 'Favorito'
+    ABANDONADO = 'ABANDONADO', 'Abandonado'
 
-# ----------------------------
-# Modelos Principales
-# ----------------------------
-
-class Persona(models.Model):
-    nombre = models.CharField(max_length= 255, null= False, blank=False)
-    apellido = models.CharField(max_length= 255, null= False, blank=False)
-    telefono = models.CharField(max_length= 20, null= False, blank=False)
-    correo = models.EmailField(max_length= 255, null= False, blank=False, unique=True)
-
-    def __str__(self):
-        return self.nombre 
- 
-class Cuenta (models.Model):
-    usuario = models.CharField(max_length= 255, null= False, blank=False)
-    contrasena = models.CharField(max_length= 255, null= False, blank=False)
-    persona = models.ForeignKey(Persona, on_delete=models.CASCADE)
-    estado = models.CharField(
-        max_length=1,
-        choices=Estado.choices,
-        default=Estado.ACTIVO,
-    )
+class CustomUser(AbstractUser):
+    
+    class Roles(models.TextChoices):
+        ADMIN = 'ADMIN', 'Admin'
+        USER = 'USER', 'User'
 
     rol = models.CharField(
-        max_length= 2,
-        choices= Rol.choices,
-        default= Rol.USUARIO,
+        max_length=5,
+        choices=Roles.choices,
+        default=Roles.USER
     )
 
-    def save(self, *args, **kwargs):
-        # Solo hashea si no está ya hasheada
-        if not self.contrasena.startswith('pbkdf2_'):
-            self.contrasena = make_password(self.contrasena)
-        super().save(*args, **kwargs)
-
-    def __str__(self):
-        return self.usuario
-    
-
 class MaterialLectura(models.Model):
-    titulo = models.CharField(max_length= 255, null= False, blank=False)
-    autor = models.CharField(max_length= 255, null= False, blank=False)
-    anio_publicacion = models.PositiveIntegerField(null= False, blank=False, default=2025)
+    titulo = models.CharField(max_length=255)
+    autor = models.CharField(max_length=255)
+    anio_publicacion = models.PositiveIntegerField()
     genero = models.CharField(max_length=20, choices=Genero.choices, default=Genero.CIENCIAS)
-    editorial = models.CharField(max_length= 255, null= False, blank=False)
+    editorial = models.CharField(max_length=255)
 
     class Meta:
-        abstract = False  # va a crear una tabla en la base de datos por registro literario
-    
-    
-#modulo lectura
-class Libro (MaterialLectura):
-    isbn = models.CharField(max_length= 13, null= False, blank=False)  
-    
+        abstract = True  # Solo las subclases tendrán tabla en DB
+
+class Libro(MaterialLectura):
+    isbn = models.CharField(max_length=13)
 
     def __str__(self):
         return self.titulo
 
-class Manga (MaterialLectura):
-    volumen = models.PositiveIntegerField(null= False, blank=False,default=1)
+class Manga(MaterialLectura):
+    volumen = models.PositiveIntegerField(default=1)
 
     def __str__(self):
         return self.titulo
 
-class Novela (MaterialLectura):
-    volumen = models.PositiveIntegerField(null= False, blank=False,default=1)
+class Novela(MaterialLectura):
+    volumen = models.PositiveIntegerField(default=1)
 
     def __str__(self):
         return self.titulo
-    
+
+class MaterialGeneral(models.Model):
+    """Agrupa cualquier tipo de material"""
+    tipo = models.CharField(max_length=50, choices=[
+        ('libro', 'Libro'),
+        ('manga', 'Manga'),
+        ('novela', 'Novela'),
+    ])
+    id_referencia = models.PositiveIntegerField()
+    titulo = models.CharField(max_length=255)
+
+    def __str__(self):
+        return f"{self.tipo}: {self.titulo}"
+
 
 class RegistroLectura(models.Model):
-    persona = models.ForeignKey(Persona, on_delete=models.CASCADE)
-    material = models.ForeignKey(MaterialLectura, on_delete=models.CASCADE)
-    fecha_creacion = models.DateTimeField(auto_now_add=True)
-    pagina_actual = models.PositiveIntegerField()
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    material = models.ForeignKey(MaterialGeneral, on_delete=models.CASCADE)
+    pagina_actual = models.PositiveIntegerField(default=1)
     estado = models.CharField(max_length=10, choices=EstadoLectura.choices, default=EstadoLectura.PENDIENTE)
 
-
-    def __str__(self):
-        return f"{self.persona} - {self.material} ({self.estado})"
+    class Meta:
+        unique_together = ('user', 'material')
