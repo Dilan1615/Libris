@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Libro, Manga, Novela, RegistroLectura
+from .models import Libro, Manga, Novela, RegistroLectura, MaterialGeneral
 from api.models import CustomUser  # Importa tu modelo de usuario personalizado
 
 # -----------------------------
@@ -67,4 +67,9 @@ class RegistroLecturaSerializer(serializers.ModelSerializer):
     class Meta:
         model = RegistroLectura
         fields = '__all__'        
+
+class MaterialGeneralSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MaterialGeneral
+        fields = '__all__'
    

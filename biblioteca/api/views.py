@@ -1,12 +1,15 @@
 from rest_framework import status,viewsets,permissions  # Códigos de estado HTTP
 from rest_framework.views import APIView  # Base para crear vistas de DRF tipo clase
 from rest_framework.response import Response  # Para devolver respuestas JSON
-from rest_framework.permissions import IsAuthenticated  # Permiso para rutas protegidas
+from rest_framework.permissions import IsAuthenticated, AllowAny  # Permiso para rutas protegidas
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView    
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken  # Para generar JWT (access y refresh)
 from rest_framework.permissions import AllowAny
+from .authentications import CookiesJWTAuthentication
 
-from .models import CustomUser,Libro,Manga,Novela, RegistroLectura    
-from .serializers import RegisterSerializer, UserProfileSerializer,LibroSerializer,NovelaSerializer,MangaSerializer,RegistroLecturaSerializer 
+from .models import CustomUser,Libro,Manga,Novela, RegistroLectura,MaterialGeneral    
+from .serializers import RegisterSerializer, UserProfileSerializer,LibroSerializer,NovelaSerializer,MangaSerializer,RegistroLecturaSerializer, MaterialGeneralSerializer 
 
 # -----------------------------
 # Registro de usuario
@@ -50,12 +53,109 @@ class LoginView(APIView):
         # Si no coincide el username o la contraseña
         return Response({"detail": "Credenciales inválidas"}, status=status.HTTP_401_UNAUTHORIZED)
 
+#-----------------------------
+# Cookies de autenticación
+#-----------------------------
+class LoginView(TokenObtainPairView):
+    def post(self, request):
+      
+        username = request.data.get('username')
+        password = request.data.get('password')
+        user = CustomUser.objects.filter(username=username).first()
+        if user and user.check_password(password):
+            refresh = RefreshToken.for_user(user)
+            response = Response({
+                "access_token": str(refresh.access_token),
+                "refresh_token": str(refresh)
+            })
+            # Establece las cookies en la respuesta
+            response.set_cookie(
+                key='access_token',
+                value=str(refresh.access_token),
+                httponly=True,
+                secure=False,
+                samesite='None',
+                path='/'
+            )
+
+            response.set_cookie(
+                key='refresh_token',
+                value=str(refresh),
+                httponly=True,
+                secure=False,
+                samesite='None',
+                path='/'
+            )
+            return response
+        return Response({"detail": "Credenciales inválidas"}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+class CustomTokenRefreshView(TokenRefreshView):
+    def post(self, request, *args, **kwargs):
+        try:
+            refresh_token = request.COOKIES.get('refresh_token')
+
+            if not refresh_token:
+                return Response(
+                    {'refreshed': False, 'error': 'No hay refresh_token'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Asignar refresh token al cuerpo
+            request.data['refresh'] = refresh_token
+
+            # Obtener nuevo access token desde la vista base
+            response = super().post(request, *args, **kwargs)
+            tokens = response.data
+            access_token = tokens.get('access')
+
+            # Nueva respuesta personalizada
+            res = Response({
+                'refreshed': True,
+                'access': access_token
+            }, status=status.HTTP_200_OK)
+
+            # Guardar el nuevo access token en cookie segura
+            res.set_cookie(
+                key='access_token',
+                value=access_token,
+                httponly=True,
+                secure=False,      
+                samesite='None',
+                path='/'
+            )
+
+            return res
+
+        except Exception as e:
+            print("Error al refrescar token:", e)
+            res = Response({
+                'refreshed': False,
+                'error': 'Token invalido o expirado'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+            res.delete_cookie('access_token', path='/')
+            res.delete_cookie('refresh_token', path='/')
+            return res    
+
+class LogoutView(APIView):
+    def post(self, request):
+        try:
+            refresh_token = request.COOKIES.get('refresh_token')
+            token = RefreshToken(refresh_token)
+            # ← Se agrega a la lista negra
+            response = Response({"success": "Logout exitoso"}, status=status.HTTP_205_RESET_CONTENT)
+            response.delete_cookie('access_token')
+            response.delete_cookie('refresh_token')
+            return response
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)       
+
 # -----------------------------
 # Ver perfil del usuario
 # -----------------------------
 class ProfileView(APIView):
     permission_classes = [IsAuthenticated]  # Solo usuarios autenticados pueden acceder
-
+    authentication_classes = [CookiesJWTAuthentication]  # Usar autenticación por cookies
     def get(self, request):
         user = request.user  # Obtiene el usuario a partir del token enviado en los headers
         serializer = UserProfileSerializer(user)  # Serializa solo los campos seguros (sin contraseña)
@@ -75,7 +175,7 @@ class IsAdminCustom(permissions.BasePermission):
 class LibroViewSet(viewsets.ModelViewSet):
     queryset = Libro.objects.all()
     serializer_class = LibroSerializer
-
+    authentication_classes = [CookiesJWTAuthentication]  # Usar autenticación por cookies
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:  # Solo ver
             return [AllowAny()]
@@ -85,7 +185,7 @@ class LibroViewSet(viewsets.ModelViewSet):
 class MangaViewSet(viewsets.ModelViewSet):
     queryset = Manga.objects.all()
     serializer_class = MangaSerializer
-
+    authentication_classes = [CookiesJWTAuthentication]  # Usar autenticación por cookies
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [AllowAny()]
@@ -95,16 +195,25 @@ class MangaViewSet(viewsets.ModelViewSet):
 class NovelaViewSet(viewsets.ModelViewSet):
     queryset = Novela.objects.all()
     serializer_class = NovelaSerializer
-
+    authentication_classes = [CookiesJWTAuthentication]  # Usar autenticación por cookies
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [AllowAny()]
         return [IsAdminCustom()]
 
+
 class RegistroLecturaViewSet(viewsets.ModelViewSet):
     queryset = RegistroLectura.objects.all()
     serializer_class = RegistroLecturaSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [CookiesJWTAuthentication]  # Usar autenticación por cookies
 
-    def get_queryset(self):        
-        return self.queryset.filter(user=self.request.user)
+    def perform_create(self, serializer):
+        # El usuario se asigna automáticamente desde el token JWT
+        serializer.save(user=self.request.user)
+
+class MaterialGeneralViewSet(viewsets.ModelViewSet):
+    queryset = MaterialGeneral.objects.all()
+    serializer_class = MaterialGeneralSerializer
+    permission_classes = [permissions.IsAuthenticated]  
+    

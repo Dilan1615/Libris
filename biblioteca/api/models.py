@@ -81,8 +81,16 @@ class MaterialGeneral(models.Model):
 class RegistroLectura(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     material = models.ForeignKey(MaterialGeneral, on_delete=models.CASCADE)
+    titulo = models.CharField(max_length=255, blank=True)  # campo opcional
     pagina_actual = models.PositiveIntegerField(default=1)
     estado = models.CharField(max_length=10, choices=EstadoLectura.choices, default=EstadoLectura.PENDIENTE)
 
-    class Meta:
-        unique_together = ('user', 'material')
+    def save(self, *args, **kwargs):
+        # Si el usuario no puso titulo, usar el del material
+        if not self.titulo:
+            self.titulo = self.material.titulo
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.titulo}"
+

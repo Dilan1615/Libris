@@ -134,6 +134,12 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),   
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),     
     "ROTATE_REFRESH_TOKENS": False,                  
-    "BLACKLIST_AFTER_ROTATION": True,               
-    "AUTH_HEADER_TYPES": ("Bearer",),                
+    "BLACKLIST_AFTER_ROTATION": False,               
+    "AUTH_HEADER_TYPES": ("Bearer",),       
+    'AUTH_COOKIE': 'access_token',  # Cookie name for the access token
+    'AUTH_COOKIE_REFRESH': 'refresh_token',  # Cookie name for the refresh token
+    'AUTH_COOKIE_SECURE': True,  # Set to True if using HTTPS
+    'AUTH_COOKIE_HTTP_ONLY': True,  # Make the cookie HTTP only
+    'AUTH_COOKIE_PATH': '/',  # Root path for the cookie
+    'AUTH_COOKIE_SAMESITE': 'Lax',  # Adjust according to your needs         
 }
