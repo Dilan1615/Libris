@@ -53,6 +53,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'biblioteca.api.middlware.GlobalExceptionMiddleware',  # Middleware para manejo global de excepciones
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
@@ -143,3 +144,6 @@ SIMPLE_JWT = {
     'AUTH_COOKIE_PATH': '/',  # Root path for the cookie
     'AUTH_COOKIE_SAMESITE': 'Lax',  # Adjust according to your needs         
 }
+
+CORS_ALLOW_CREDENTIALS = True  # Permite enviar cookies en solicitudes CORS
+CORS_ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']  # Métodos HTTP permitidos
