@@ -7,6 +7,8 @@ from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, Ou
 from rest_framework_simplejwt.tokens import RefreshToken  # Para generar JWT (access y refresh)
 from rest_framework.permissions import AllowAny
 from .authentications import CookiesJWTAuthentication
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters
 
 from .models import CustomUser,Libro,Manga,Novela, RegistroLectura,MaterialGeneral    
 from .serializers import RegisterSerializer, UserProfileSerializer,LibroSerializer,NovelaSerializer,MangaSerializer,RegistroLecturaSerializer, MaterialGeneralSerializer 
@@ -175,9 +177,21 @@ class IsAdminCustom(permissions.BasePermission):
 class LibroViewSet(viewsets.ModelViewSet):
     queryset = Libro.objects.all()
     serializer_class = LibroSerializer
-    authentication_classes = [CookiesJWTAuthentication]  # Usar autenticación por cookies
+    authentication_classes = [CookiesJWTAuthentication]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+
+    # Campos por los que se puede filtrar
+    filterset_fields = ['genero', 'anio_publicacion', 'editorial']
+
+    # Campos por los que se puede buscar
+    search_fields = ['titulo', 'autor', 'isbn']
+
+    # Campos por los que se puede ordenar
+    ordering_fields = ['anio_publicacion', 'titulo', 'autor']
+    ordering = ['titulo']  # orden por defecto
+
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:  # Solo ver
+        if self.action in ['list', 'retrieve']:
             return [AllowAny()]
         return [IsAdminCustom()]  
 
@@ -185,7 +199,13 @@ class LibroViewSet(viewsets.ModelViewSet):
 class MangaViewSet(viewsets.ModelViewSet):
     queryset = Manga.objects.all()
     serializer_class = MangaSerializer
-    authentication_classes = [CookiesJWTAuthentication]  # Usar autenticación por cookies
+    authentication_classes = [CookiesJWTAuthentication]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['genero', 'anio_publicacion', 'editorial']
+    search_fields = ['titulo', 'autor']
+    ordering_fields = ['anio_publicacion', 'titulo']
+    ordering = ['titulo']
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [AllowAny()]
@@ -195,7 +215,13 @@ class MangaViewSet(viewsets.ModelViewSet):
 class NovelaViewSet(viewsets.ModelViewSet):
     queryset = Novela.objects.all()
     serializer_class = NovelaSerializer
-    authentication_classes = [CookiesJWTAuthentication]  # Usar autenticación por cookies
+    authentication_classes = [CookiesJWTAuthentication]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['genero', 'anio_publicacion', 'editorial']
+    search_fields = ['titulo', 'autor']
+    ordering_fields = ['anio_publicacion', 'titulo']
+    ordering = ['titulo']
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [AllowAny()]
