@@ -49,7 +49,7 @@ LibraryV1/
 
 ### 1. Clonar el repositorio
 ```
-git clone https://github.com/Dilan1615/Contenedor_biblioteca.git
+git clone https://github.com/Dilan1615/Libris.git
 cd Contenedor_biblioteca
 ```
 ### 2. Construir y levantar los contenedores
