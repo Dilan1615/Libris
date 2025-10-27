@@ -1,0 +1,32 @@
+
+services:
+  auth_service_libris:
+    build: ./auth_service/auth_service
+    container_name: auth_service_libris
+    ports:
+      - "8001:8000"
+    environment:
+      - DJANGO_SETTINGS_MODULE=auth_service.settings
+    networks:
+      - libris
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+
+  lectura_api_libris:
+    build: ./Backend
+    container_name: lectura_api_libris
+    ports:
+      - "8003:8002"
+    environment:
+      - SECRET_KEY=django-insecure-8$ug272c*p125tx^s6#hp+i_ynl%_)hnk19g^=2w8zfr4i%t_+
+      - DJANGO_SETTINGS_MODULE=Backend.settings
+      - AUTH_URL=http://auth_service_libris:8000
+    depends_on:
+      - auth_service_libris
+    networks:
+      - libris
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8002"
+
+networks:
+  libris:
+    driver: bridge
+
