@@ -1,39 +1,49 @@
 from rest_framework import serializers
 from .models import Libro, Manga, Novela, RegistroLectura, MaterialGeneral
 from api.models import CustomUser  # Importa tu modelo de usuario personalizado
+from django.core.mail import send_mail
+from django.conf import settings
 
 # -----------------------------
 # Serializer para registro
 # -----------------------------
 class RegisterSerializer(serializers.ModelSerializer):
-    password2 = serializers.CharField(write_only=True)  # Campo extra para confirmar la contraseña, no se guarda en la base 
+    password2 = serializers.CharField(write_only=True)
 
     class Meta:
         model = CustomUser
-        fields =[ 'username', 'email', 'password', 'password2', 'rol']  # Campos que recibirá y validará
+        fields = ['username', 'email', 'password', 'password2', 'rol']
 
     def validate(self, data):
-        # Verifica que las contrasenas coincidan
         if data['password'] != data['password2']:
             raise serializers.ValidationError("La contraseña no coincide.")
-        
-        #verifica que el email no esté en uso
         if CustomUser.objects.filter(email=data['email']).exists():
             raise serializers.ValidationError("El email ya está en uso.")
-        
         if CustomUser.objects.filter(username=data['username']).exists():
             raise serializers.ValidationError("El nombre de usuario ya está en uso.")
-        return data  # Si todo es correcto, devuelve los datos validados
+        return data
 
     def create(self, validated_data):
-        # Crea un usuario usando create_user (hashea la contraseña automáticamente)
         user = CustomUser.objects.create_user(
             username=validated_data['username'],
             email=validated_data['email'],
             password=validated_data['password'],
-            rol=validated_data.get('rol', CustomUser.Roles.USER)  # Sino se elige un rol por defecto es USER
+            rol=validated_data.get('rol', CustomUser.Roles.USER)
         )
-        return user  # Devuelve el usuario creado
+
+        # Intentar enviar correo
+        try:
+            send_mail(
+               subject="Bienvenido a Libris",
+                message=f"Hola {user.username},\n\nGracias por registrarte en Libris.\n¡Esperamos que disfrutes tu experiencia!",
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
+        except Exception as e:
+            print(f"⚠️ Error al enviar el correo: {e}")
+
+        return user
 
 # -----------------------------
 # Serializer para mostrar perfil
