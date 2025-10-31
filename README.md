@@ -73,5 +73,5 @@ Base URL: http://127.0.0.1:8000/
 ### 📚 Registro de lectura
 - `GET /api/lectura/` - Listar registros
 - `POST /api/lectura/` - Crear registro de lectura
-###  Comentarios
+### 💬 Comentarios
 - `POST /comentarios/` - Comentar registro lectura
