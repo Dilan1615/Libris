@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Libro, Manga, Novela, RegistroLectura, MaterialGeneral
+from .models import Libro, Manga, Novela, RegistroLectura, MaterialGeneral, Comentarios
 from api.models import CustomUser  # Importa tu modelo de usuario personalizado
 from django.core.mail import send_mail
 from django.conf import settings
@@ -72,14 +72,52 @@ class NovelaSerializer(serializers.ModelSerializer):
         model = Novela
         fields = ['id', 'titulo', 'autor', 'anio_publicacion', 'genero', 'editorial', 'volumen']
 
-
 class RegistroLecturaSerializer(serializers.ModelSerializer):
+    titulo_material = serializers.CharField(source='material.obtener_titulo_material', read_only=True)
+    tipo_material = serializers.CharField(source='material.tipo', read_only=True)
+
     class Meta:
         model = RegistroLectura
-        fields = '__all__'        
+        fields = ['titulo', 'titulo_material', 'tipo_material', 'pagina_actual', 'estado']
+        
 
 class MaterialGeneralSerializer(serializers.ModelSerializer):
+    titulo_material = serializers.SerializerMethodField()
+
     class Meta:
         model = MaterialGeneral
-        fields = '__all__'
-   
+        fields = ['id', 'tipo', 'libro', 'manga', 'novela', 'titulo_material']
+
+    def get_titulo_material(self, obj):
+        if obj.tipo == 'libro' and obj.libro:
+            return obj.libro.titulo
+        elif obj.tipo == 'manga' and obj.manga:
+            return obj.manga.titulo
+        elif obj.tipo == 'novela' and obj.novela:
+            return obj.novela.titulo
+        return "Sin material"
+
+class ComentariosSerializer(serializers.ModelSerializer):
+    titulo_material = serializers.SerializerMethodField()
+    tipo_material = serializers.SerializerMethodField()
+    nombre_usuario = serializers.SerializerMethodField() 
+
+    class Meta:
+        model = Comentarios
+        fields = ['user', 'nombre_usuario', 'material', 'descripcion', 'titulo_material', 'tipo_material']
+        read_only_fields = ['user', 'nombre_usuario', 'titulo_material', 'tipo_material']
+
+    def get_nombre_usuario(self, obj):
+        return obj.user.username  # o obj.user.get_full_name() si usas nombre completo
+
+    def get_titulo_material(self, obj):
+        if obj.material.tipo == 'libro' and obj.material.libro:
+            return obj.material.libro.titulo
+        elif obj.material.tipo == 'manga' and obj.material.manga:
+            return obj.material.manga.titulo
+        elif obj.material.tipo == 'novela' and obj.material.novela:
+            return obj.material.novela.titulo
+        return "Sin material"
+
+    def get_tipo_material(self, obj):
+        return obj.material.tipo

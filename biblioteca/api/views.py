@@ -10,8 +10,8 @@ from .authentications import CookiesJWTAuthentication
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 
-from .models import CustomUser,Libro,Manga,Novela, RegistroLectura,MaterialGeneral    
-from .serializers import RegisterSerializer, UserProfileSerializer,LibroSerializer,NovelaSerializer,MangaSerializer,RegistroLecturaSerializer, MaterialGeneralSerializer 
+from .models import CustomUser,Libro,Manga,Novela, RegistroLectura,MaterialGeneral,Comentarios
+from .serializers import RegisterSerializer, UserProfileSerializer,LibroSerializer,NovelaSerializer,MangaSerializer,RegistroLecturaSerializer, MaterialGeneralSerializer,ComentariosSerializer 
 
 # -----------------------------
 # Registro de usuario
@@ -234,12 +234,44 @@ class RegistroLecturaViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     authentication_classes = [CookiesJWTAuthentication]  # Usar autenticación por cookies
 
+    def get_queryset(self):
+        return RegistroLectura.objects.filter(user=self.request.user)
+
+    # Al crear un registro, asigna automáticamente el usuario actual
     def perform_create(self, serializer):
-        # El usuario se asigna automáticamente desde el token JWT
         serializer.save(user=self.request.user)
 
 class MaterialGeneralViewSet(viewsets.ModelViewSet):
     queryset = MaterialGeneral.objects.all()
     serializer_class = MaterialGeneralSerializer
     permission_classes = [permissions.IsAuthenticated]  
+    authentication_classes = [CookiesJWTAuthentication]  # Usar autenticación por cookies
+
+    def get_queryset(self):
+        tipo = self.request.query_params.get('tipo')
+        user = self.request.user
+
+        # Filtra los registros de ese usuario
+        registros_usuario = RegistroLectura.objects.filter(user=user)
+
+        # Obtiene solo los materiales asociados a esos registros
+        queryset = MaterialGeneral.objects.filter(id__in=registros_usuario.values_list('material_id', flat=True))
+
+        # Opcional: filtra por tipo si se pasa como query param
+        if tipo:
+            queryset = queryset.filter(tipo=tipo)
+
+        return queryset
+
+class ComentarioViewSet(viewsets.ModelViewSet):
+    queryset = Comentarios.objects.all()
+    serializer_class = ComentariosSerializer
+
+    def get_queryset(self):
+        # Devuelve todos los comentarios (públicos)
+        return Comentarios.objects.all()
+
+    def perform_create(self, serializer):
+        # Asigna automáticamente el usuario que crea el comentario
+        serializer.save(user=self.request.user) 
     

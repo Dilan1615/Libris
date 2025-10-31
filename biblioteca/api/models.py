@@ -35,6 +35,9 @@ class CustomUser(AbstractUser):
         choices=Roles.choices,
         default=Roles.USER
     )
+    
+    def __str__(self):
+        return self.username
 
 class MaterialLectura(models.Model):
     titulo = models.CharField(max_length=255)
@@ -65,17 +68,25 @@ class Novela(MaterialLectura):
         return self.titulo
 
 class MaterialGeneral(models.Model):
-    """Agrupa cualquier tipo de material"""
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     tipo = models.CharField(max_length=50, choices=[
         ('libro', 'Libro'),
         ('manga', 'Manga'),
         ('novela', 'Novela'),
     ])
-    id_referencia = models.PositiveIntegerField()
-    titulo = models.CharField(max_length=255)
+    libro = models.ForeignKey('api.Libro', on_delete=models.CASCADE, null=True, blank=True)
+    manga = models.ForeignKey('api.Manga', on_delete=models.CASCADE, null=True, blank=True)
+    novela = models.ForeignKey('api.Novela', on_delete=models.CASCADE, null=True, blank=True)
 
     def __str__(self):
-        return f"{self.tipo}: {self.titulo}"
+        if self.tipo == 'libro' and self.libro:
+            return f"Libro: {self.libro.titulo}"
+        elif self.tipo == 'manga' and self.manga:
+            return f"Manga: {self.manga.titulo}"
+        elif self.tipo == 'novela' and self.novela:
+            return f"Novela: {self.novela.titulo}"
+        return "Sin material"
+
 
 
 class RegistroLectura(models.Model):
@@ -93,4 +104,11 @@ class RegistroLectura(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.titulo}"
+    
+class Comentarios(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    material = models.ForeignKey(MaterialGeneral, on_delete=models.CASCADE)
+    descripcion = models.TextField()
 
+    def __str__(self):
+        return f"{self.user.username} - {self.descripcion[:30]}"
