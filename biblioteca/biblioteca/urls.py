@@ -5,6 +5,7 @@ from api.views import (LibroViewSet, MangaViewSet, NovelaViewSet, RegisterView, 
                        ProfileView, RegistroLecturaViewSet, MaterialGeneralViewSet,LogoutView, LoginView
                        ,ComentarioViewSet
                        )
+from biblioteca.api import views
 
 router = DefaultRouter()
 router.register('libros', LibroViewSet)
@@ -21,5 +22,6 @@ urlpatterns = [
     path('api/login/', LoginView.as_view()),
     path('api/profile/', ProfileView.as_view()),   
     path('api/logout/', LogoutView.as_view()), 
+    path('api/libros-externos/', views.obtener_libros, name='obtener_libros')
 ] + router.urls
 

@@ -9,6 +9,8 @@ from rest_framework.permissions import AllowAny
 from .authentications import CookiesJWTAuthentication
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
+import requests
+from django.http import JsonResponse
 
 from .models import CustomUser,Libro,Manga,Novela, RegistroLectura,MaterialGeneral,Comentarios
 from .serializers import RegisterSerializer, UserProfileSerializer,LibroSerializer,NovelaSerializer,MangaSerializer,RegistroLecturaSerializer, MaterialGeneralSerializer,ComentariosSerializer 
@@ -274,4 +276,38 @@ class ComentarioViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         # Asigna automáticamente el usuario que crea el comentario
         serializer.save(user=self.request.user) 
+    
+
+
+    #Ejemplo de uso de un api para probar extraer datos externos de libros
+    
+def obtener_libros(request):
+    try:
+        # URL de la API externa
+        url = "https://www.googleapis.com/books/v1/volumes?q=python"
+
+        # Realizar la petición
+        respuesta = requests.get(url)
+        datos = respuesta.json()
+
+        # Extraer información relevante
+        libros = []
+        for item in datos.get("items", []):
+            info = item["volumeInfo"]
+            libros.append({
+                "titulo": info.get("title"),
+                "autores": info.get("authors", []),
+                "editorial": info.get("publisher"),
+                "fecha_publicacion": info.get("publishedDate"),
+                "descripcion": info.get("description"),
+                "portada": info.get("imageLinks", {}).get("thumbnail")
+                
+            })
+
+        # Devolver los datos en formato JSON
+        return JsonResponse({"libros": libros}, status=200)
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
     
