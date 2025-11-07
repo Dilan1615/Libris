@@ -5,7 +5,7 @@ from api.views import (LibroViewSet, MangaViewSet, NovelaViewSet, RegisterView, 
                        ProfileView, RegistroLecturaViewSet, MaterialGeneralViewSet,LogoutView, LoginView
                        ,ComentarioViewSet
                        )
-from biblioteca.api import views
+from api import views
 
 router = DefaultRouter()
 router.register('libros', LibroViewSet)
