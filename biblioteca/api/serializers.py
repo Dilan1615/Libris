@@ -65,7 +65,7 @@ class LibroSerializer(serializers.ModelSerializer):
 class MangaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Manga
-        fields = ['id', 'titulo', 'autor', 'anio_publicacion', 'genero', 'editorial', 'volumen']
+        fields = ['id', 'titulo', 'autor', 'anio_publicacion', 'genero', 'editorial', 'tomo']
 
 class NovelaSerializer(serializers.ModelSerializer):
     class Meta:
@@ -100,24 +100,41 @@ class MaterialGeneralSerializer(serializers.ModelSerializer):
 class ComentariosSerializer(serializers.ModelSerializer):
     titulo_material = serializers.SerializerMethodField()
     tipo_material = serializers.SerializerMethodField()
-    nombre_usuario = serializers.SerializerMethodField() 
+    nombre_usuario = serializers.SerializerMethodField()
 
     class Meta:
         model = Comentarios
-        fields = ['user', 'nombre_usuario', 'material', 'descripcion', 'titulo_material', 'tipo_material']
-        read_only_fields = ['user', 'nombre_usuario', 'titulo_material', 'tipo_material']
+        fields = [
+            'user',
+            'nombre_usuario',
+            'libro',
+            'manga',
+            'novela',
+            'descripcion',
+            'fecha',
+            'titulo_material',
+            'tipo_material'
+        ]
+        read_only_fields = ['user', 'nombre_usuario', 'titulo_material', 'tipo_material', 'fecha']
 
     def get_nombre_usuario(self, obj):
-        return obj.user.username  # o obj.user.get_full_name() si usas nombre completo
+        return obj.user.username
 
     def get_titulo_material(self, obj):
-        if obj.material.tipo == 'libro' and obj.material.libro:
-            return obj.material.libro.titulo
-        elif obj.material.tipo == 'manga' and obj.material.manga:
-            return obj.material.manga.titulo
-        elif obj.material.tipo == 'novela' and obj.material.novela:
-            return obj.material.novela.titulo
+        if obj.libro:
+            return obj.libro.titulo
+        if obj.manga:
+            return obj.manga.titulo
+        if obj.novela:
+            return obj.novela.titulo
         return "Sin material"
 
     def get_tipo_material(self, obj):
-        return obj.material.tipo
+        if obj.libro:
+            return "libro"
+        if obj.manga:
+            return "manga"
+        if obj.novela:
+            return "novela"
+        return "desconocido"
+

@@ -1,3 +1,4 @@
+from django.forms import ValidationError
 from rest_framework import status,viewsets,permissions  # Códigos de estado HTTP
 from rest_framework.views import APIView  # Base para crear vistas de DRF tipo clase
 from rest_framework.response import Response  # Para devolver respuestas JSON
@@ -9,6 +10,7 @@ from rest_framework.permissions import AllowAny
 from .authentications import CookiesJWTAuthentication
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
+
 import requests
 from django.http import JsonResponse
 
@@ -154,7 +156,7 @@ class LogoutView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)       
 
-# -----------------------------
+# ----------------------s-------
 # Ver perfil del usuario
 # -----------------------------
 class ProfileView(APIView):
@@ -270,17 +272,27 @@ class ComentarioViewSet(viewsets.ModelViewSet):
     serializer_class = ComentariosSerializer
 
     def get_queryset(self):
-        # Devuelve todos los comentarios (públicos)
-        return Comentarios.objects.all()
+        # Todos pueden ver los comentarios (publicos)
+        return Comentarios.objects.all().order_by('-fecha')
 
     def perform_create(self, serializer):
-        # Asigna automáticamente el usuario que crea el comentario
-        serializer.save(user=self.request.user) 
-    
+        # Validar que SOLO un material sea enviado
+        libro = serializer.validated_data.get('libro')
+        manga = serializer.validated_data.get('manga')
+        novela = serializer.validated_data.get('novela')
+
+        materiales = [libro, manga, novela]
+        materiales_elegidos = [m for m in materiales if m is not None]
+
+        if len(materiales_elegidos) == 0:
+            raise ValidationError("Debes seleccionar libro, manga o novela.")
+        if len(materiales_elegidos) > 1:
+            raise ValidationError("Solo puedes comentar un tipo de material a la vez.")
+
+        # Asigna automaticamente el usuario actual
+        serializer.save(user=self.request.user)
 
 
-    #Ejemplo de uso de un api para probar extraer datos externos de libros
-    
 def obtener_libros(request):
     try:
         # URL de la API externa
@@ -308,6 +320,4 @@ def obtener_libros(request):
         return JsonResponse({"libros": libros}, status=200)
 
     except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
-
-    
+        return JsonResponse({"error": str(e)}, status=500)    

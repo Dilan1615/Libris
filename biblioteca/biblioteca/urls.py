@@ -3,9 +3,8 @@ from django.contrib import admin
 from rest_framework.routers import DefaultRouter
 from api.views import (LibroViewSet, MangaViewSet, NovelaViewSet, RegisterView, LoginView, 
                        ProfileView, RegistroLecturaViewSet, MaterialGeneralViewSet,LogoutView, LoginView
-                       ,ComentarioViewSet
+                       ,ComentarioViewSet, CustomTokenRefreshView, obtener_libros
                        )
-from api import views
 
 router = DefaultRouter()
 router.register('libros', LibroViewSet)
@@ -22,6 +21,8 @@ urlpatterns = [
     path('api/login/', LoginView.as_view()),
     path('api/profile/', ProfileView.as_view()),   
     path('api/logout/', LogoutView.as_view()), 
-    path('api/libros-externos/', views.obtener_libros, name='obtener_libros')
-] + router.urls
+    path('api/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
+    path('api/libros-externos/', obtener_libros, name='obtener_libros'),
+    path('admin/', admin.site.urls),   # <- ESTA ES LA QUE IMPORTA
 
+] + router.urls
