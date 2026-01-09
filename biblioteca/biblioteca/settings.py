@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+from decouple import config
 from pathlib import Path
 from datetime import timedelta
 
@@ -42,6 +43,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'api',
     'corsheaders',
+    'django_filters',
 ]
 
 MIDDLEWARE = [
@@ -52,11 +54,12 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'api.middlware.GlobalExceptionMiddleware',  # Middleware para manejo global de excepciones
+    # 'django.middleware.clickjacking.XFrameOptionsMiddleware',  # Deshabilitado para permitir PDFs en iframe
+    'api.middlware.GlobalExceptionMiddleware',  # Middleware personalizado para manejo global de excepciones
+
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True
+
 
 ROOT_URLCONF = 'biblioteca.urls'
 
@@ -126,6 +129,10 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# Media files (User uploaded content)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
@@ -145,9 +152,12 @@ SIMPLE_JWT = {
     'AUTH_COOKIE_SAMESITE': 'Lax',  # Adjust according to your needs         
 }
 
-CORS_ALLOW_CREDENTIALS = True  # Permite enviar cookies en solicitudes CORS
-CORS_ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']  # Métodos HTTP permitidos
 
+# CORS settings (dev abierto para visor PDF)
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+CORS_ALLOWED_HEADERS = ['*']
 
 REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': [
@@ -155,10 +165,11 @@ REST_FRAMEWORK = {
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ]
-}   # Configuración de filtros para DRF
+}
 
 
 # Configuración para envío de emails
+# settings.py
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "smtp.gmail.com"
@@ -167,3 +178,5 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = "sebrock4592@gmail.com"
 EMAIL_HOST_PASSWORD = "vmrv jqkg qrud mdxr"
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+
