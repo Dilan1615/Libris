@@ -4,6 +4,8 @@ import { getRegistrosLectura } from '../api/materialService';
 import { estadisticasService } from '../api/ratingService';
 import { updateProfile } from '../api/authService';
 import RegistroCard from '../components/RegistroCard';
+import Navbar from '../components/Navbar';
+import { getThemePalette } from '../styles/theme';
 import { useNavigate } from 'react-router-dom';
 import '../styles/animations.css';
 
@@ -138,44 +140,18 @@ const ProfilePage = () => {
   }
 
   // Paleta de colores
-  const palette = theme === 'light'
-    ? {
-        pageBg: '#f8fafc',
-        cardBg: 'rgba(255, 255, 255, 0.85)',
-        text: '#0f172a',
-        textLight: '#475569',
-        border: 'rgba(148, 163, 184, 0.3)',
-        primary: '#06b6d4',
-        success: '#22c55e',
-        accent: '#a855f7',
-      }
-    : {
-        pageBg: '#0b1224',
-        cardBg: 'rgba(17, 24, 39, 0.85)',
-        text: '#e2e8f0',
-        textLight: '#cbd5e1',
-        border: 'rgba(148, 163, 184, 0.2)',
-        primary: '#06b6d4',
-        success: '#22c55e',
-        accent: '#a855f7',
-      };
+  const palette = getThemePalette(theme);
 
   const styles = {
-    page: {
-      minHeight: '100vh',
-      background: palette.pageBg,
-      color: palette.text,
-      padding: '24px',
-      transition: 'all 0.3s ease',
-    },
     container: {
       maxWidth: '900px',
       margin: '0 auto',
       animation: 'slideIn 0.4s ease',
+      padding: '24px',
     },
     header: {
       background: palette.cardBg,
-      border: `1px solid ${palette.border}`,
+      border: `1px solid ${palette.cardBorder}`,
       borderRadius: '18px',
       padding: '28px',
       marginBottom: '28px',
@@ -247,7 +223,7 @@ const ProfilePage = () => {
     },
     section: {
       background: palette.cardBg,
-      border: `1px solid ${palette.border}`,
+      border: `1px solid ${palette.cardBorder}`,
       borderRadius: '18px',
       padding: '30px',
       boxShadow: '0 20px 40px -18px rgba(0, 0, 0, 0.35)',
@@ -380,7 +356,15 @@ const ProfilePage = () => {
   };
 
   return (
-    <div style={styles.page}>
+    <div style={{ minHeight: '100vh', background: palette.pageBg, color: palette.text }}>
+      <Navbar theme={theme} setTheme={setTheme} palette={{
+        ...palette,
+        navBg: palette.cardBg,
+        navBorder: palette.cardBorder,
+        cardBorder: palette.cardBorder,
+        secondary: palette.cardBg
+      }} />
+      
       <style>{`
         @keyframes slideIn {
           from {
@@ -402,14 +386,6 @@ const ProfilePage = () => {
         }
       `}</style>
 
-      <button
-        onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-        style={styles.themeToggle}
-        title={`Cambiar a tema ${theme === 'light' ? 'oscuro' : 'claro'}`}
-      >
-        {theme === 'light' ? '🌙' : '☀️'}
-      </button>
-
       <div style={styles.container}>
         {/* Mensajes de edición */}
         {editMessage.text && (
@@ -430,7 +406,7 @@ const ProfilePage = () => {
         {isEditingProfile && (
           <div style={{
             background: palette.cardBg,
-            border: `1px solid ${palette.border}`,
+            border: `1px solid ${palette.cardBorder}`,
             borderRadius: '18px',
             padding: '28px',
             marginBottom: '28px',
@@ -497,7 +473,7 @@ const ProfilePage = () => {
                     width: '100%',
                     padding: '10px 12px',
                     borderRadius: '8px',
-                    border: `1px solid ${palette.border}`,
+                    border: `1px solid ${palette.cardBorder}`,
                     background: palette.pageBg,
                     color: palette.text,
                     fontSize: '14px',
@@ -518,7 +494,7 @@ const ProfilePage = () => {
                     width: '100%',
                     padding: '10px 12px',
                     borderRadius: '8px',
-                    border: `1px solid ${palette.border}`,
+                    border: `1px solid ${palette.cardBorder}`,
                     background: palette.pageBg,
                     color: palette.text,
                     fontSize: '14px',
@@ -539,7 +515,7 @@ const ProfilePage = () => {
                     width: '100%',
                     padding: '10px 12px',
                     borderRadius: '8px',
-                    border: `1px solid ${palette.border}`,
+                    border: `1px solid ${palette.cardBorder}`,
                     background: palette.pageBg,
                     color: palette.text,
                     fontSize: '14px',
@@ -560,7 +536,7 @@ const ProfilePage = () => {
                     width: '100%',
                     padding: '10px 12px',
                     borderRadius: '8px',
-                    border: `1px solid ${palette.border}`,
+                    border: `1px solid ${palette.cardBorder}`,
                     background: palette.pageBg,
                     color: palette.text,
                     fontSize: '14px',
@@ -573,7 +549,7 @@ const ProfilePage = () => {
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               <button
                 onClick={handleCancelEdit}
-                style={{...styles.button, background: palette.secondary, color: palette.text, border: `2px solid ${palette.border}`, boxShadow: '0 4px 12px rgba(0,0,0,0.2)'}}
+                style={{...styles.button, background: palette.secondary, color: palette.text, border: `2px solid ${palette.cardBorder}`, boxShadow: '0 4px 12px rgba(0,0,0,0.2)'}}
                 disabled={isSaving}
               >
                 ❌ Cancelar
@@ -632,16 +608,6 @@ const ProfilePage = () => {
               aria-label="Editar perfil"
             >
               ✏️ Editar perfil
-            </button>
-            <a href="/" style={{ ...styles.button, ...styles.homeBtn, textDecoration: 'none', textAlign: 'center' }}>
-              📚 Volver al catálogo
-            </a>
-            <button
-              onClick={handleLogout}
-              style={{ ...styles.button, ...styles.logoutBtn }}
-              aria-label="Cerrar sesión"
-            >
-              🚪 Cerrar sesión
             </button>
           </div>
         </div>

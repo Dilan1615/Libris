@@ -3,6 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import MaterialCard from '../components/MaterialCard';
 import CommentModal from '../components/CommentModal'; // Nuevo
+import Navbar from '../components/Navbar';
+import { getThemePalette } from '../styles/theme';
 import { getLibros, getMangas, getNovelas, getLibrosExternos, createRegistroLectura, createComentario } from '../api/materialService';
 import '../styles/animations.css';
 
@@ -301,21 +303,11 @@ const HomePage = () => {
   ];
 
   const isDark = theme === 'dark';
-  const palette = {
-    pageBg: isDark ? '#0f172a' : '#ffffff',
-    text: isDark ? '#e5e7eb' : '#1f2937',
-    textLight: isDark ? '#94a3b8' : '#6b7280',
-    cardBg: isDark ? '#1e293b' : '#f8fafc',
-    cardBorder: isDark ? '#334155' : '#e2e8f0',
-    heroBg: isDark ? 'linear-gradient(135deg, #1e1b4b 0%, #16213e 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    heroText: isDark ? '#f1f5f9' : '#ffffff',
-    heroSub: isDark ? '#cbd5e1' : '#f1f5f9',
-    primary: isDark ? '#3b82f6' : '#667eea',
-    secondary: isDark ? '#334155' : '#e2e8f0',
-    navBg: isDark ? '#0f172a' : '#ffffff',
-    navBorder: isDark ? '#1e293b' : '#e2e8f0',
-    accent: '#764ba2',
-  };
+  const palette = getThemePalette(theme);
+
+  // Propiedades adicionales específicas de HomePage
+  palette.heroBg = isDark ? 'linear-gradient(135deg, #1e1b4b 0%, #16213e 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+  palette.heroText = isDark ? '#f1f5f9' : '#ffffff';
 
   // Eliminado PopularHero para evitar duplicación y tarjetas fuera del carrusel
 
@@ -460,9 +452,13 @@ const HomePage = () => {
   }
 
   return (
-    <div style={{...styles.page, background: palette.pageBg, color: palette.text}}>
+    <div style={{ minHeight: '100vh', background: palette.pageBg, color: palette.text }}>
+      {/* Efectos de fondo */}
       <div style={styles.glowOrb}></div>
       <div style={styles.glowOrb2}></div>
+      
+      {/* Navbar compartido */}
+      <Navbar theme={theme} setTheme={setTheme} palette={palette} />
       
       {/* Notificación flotante */}
       {notification.show && (
@@ -493,105 +489,9 @@ const HomePage = () => {
           {notification.message}
         </div>
       )}
-      
-      {/* Navbar */}
-      <header style={{...styles.navbar, background: palette.navBg, borderBottomColor: palette.navBorder, color: palette.text}}>
-        <div style={{...styles.brand, fontSize: '1.5rem', fontWeight: '800', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', cursor: 'pointer'}}>
-          📚 Libris
-        </div>
-        <div style={styles.navLinks}>
-          {['catalogo', 'libros', 'mangas', 'novelas'].map(link => {
-            const capitalLink = link.charAt(0).toUpperCase() + link.slice(1);
-            return (
-              <a 
-                key={link}
-                onClick={() => {
-                  setActiveNav(link);
-                  const sectionElement = document.getElementById(`section-${link}`);
-                  if (sectionElement) {
-                    sectionElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }
-                }}
-                style={{
-                  ...styles.navLink,
-                  color: activeNav === link ? palette.accent : palette.text,
-                  borderBottomColor: activeNav === link ? palette.accent : 'transparent',
-                  borderBottomWidth: '2px',
-                  borderBottomStyle: 'solid',
-                  paddingBottom: '4px',
-                  transition: 'all 0.3s ease',
-                }}
-              >
-                {capitalLink}
-              </a>
-            );
-          })}
-        </div>
-        <div style={styles.navActions}>
-          {isLoggedIn ? (
-            <>
-              {isAdmin && (
-                <button
-                  style={{ 
-                    ...styles.navBtn, 
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    color: '#fff',
-                    fontWeight: '600',
-                    boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)'
-                  }}
-                  onClick={() => navigate('/admin')}
-                >
-                  ⚙️ Panel de Admin
-                </button>
-              )}
-              <button
-                style={{ ...styles.navBtn, background: palette.accent, color: '#fff' }}
-                onClick={() => navigate('/profile')}
-              >
-                👤 Perfil
-              </button>
-              <button
-                style={{ ...styles.navBtn, background: '#ef4444', color: '#fff' }}
-                onClick={() => {
-                  logout();
-                  navigate('/');
-                }}
-              >
-                🚪 Cerrar sesión
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                style={{ ...styles.navBtn, background: palette.accent, color: '#fff' }}
-                onClick={() => navigate('/login')}
-              >
-                🔑 Iniciar sesión
-              </button>
-              <button
-                style={{ ...styles.navBtn, background: palette.primary, color: '#fff' }}
-                onClick={() => navigate('/register')}
-              >
-                ✨ Registrarse
-              </button>
-            </>
-          )}
-          <button 
-            style={{
-              ...styles.themeBtn,
-              background: palette.secondary,
-              color: palette.text,
-              borderColor: palette.cardBorder,
-            }} 
-            onClick={() => setTheme(isDark ? 'light' : 'dark')}
-            title="Cambiar tema"
-          >
-            {isDark ? '☀️' : '🌙'}
-          </button>
-        </div>
-      </header>
 
-      {/* Sección Popular ahora (carrusel único) — movida bajo búsqueda */}
+      {/* Contenido principal */}
+      <div style={styles.page}>
 
       {/* Stats */}
       <div style={styles.statsGrid}>
@@ -747,6 +647,7 @@ const HomePage = () => {
           onSubmit={handleCreateComentario}
         />
       )}
+      </div>
     </div>
   );
 };
@@ -760,7 +661,6 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: '32px',
-    minHeight: '100vh',
   },
   loadingContainer: {
     display: 'flex',
