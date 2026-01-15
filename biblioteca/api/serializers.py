@@ -1,5 +1,10 @@
 from rest_framework import serializers
-from .models import Libro, Manga, Novela, RegistroLectura, MaterialGeneral, Comentarios, GeneroTag, Calificacion, Favorito
+from .models import Libro, Manga, Novela, RegistroLectura, MaterialGeneral, Comentarios, GeneroTag, Calificacion, Favorito, Notification
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ['id', 'title', 'message', 'created_at', 'is_read']
+        read_only_fields = ['id', 'created_at']
 from api.models import CustomUser  # Importa tu modelo de usuario personalizado
 from django.core.mail import send_mail
 from django.conf import settings
@@ -20,6 +25,24 @@ def send_email_async(subject, message, recipient_email):
     except Exception as e:
         print(f"⚠️ Error al enviar correo a {recipient_email}: {e}")
         return False
+
+
+def create_notification(user, title, message):
+    """Crear notificación in-app (silenciosa si falla)"""
+    try:
+        return Notification.objects.create(user=user, title=title, message=message)
+    except Exception as e:
+        print(f"⚠️ No se pudo crear notificación para {getattr(user, 'username', 'anon')}: {e}")
+        return None
+
+
+def notify_user(user, subject, message, send_email=True):
+    """Crea notificación in-app y opcionalmente envía email"""
+    if user:
+        create_notification(user, subject, message)
+    if send_email:
+        send_email_async(subject, message, user.email if user else None)
+    return True
 
 # -----------------------------
 # Serializer para registro
@@ -50,12 +73,10 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         # Intentar enviar correo
         try:
-            send_mail(
-               subject="Bienvenido a Libris",
-                message=f"Hola {user.username},\n\nGracias por registrarte en Libris.\n¡Esperamos que disfrutes tu experiencia!",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                fail_silently=False,
+            notify_user(
+                user,
+                "Bienvenido a Libris",
+                f"Hola {user.username},\n\nGracias por registrarte en Libris.\n¡Esperamos que disfrutes tu experiencia!",
             )
         except Exception as e:
             print(f"⚠️ Error al enviar el correo: {e}")
@@ -69,7 +90,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     foto_perfil = serializers.SerializerMethodField()
     class Meta:
         model = CustomUser
-        fields = ['id', 'username', 'email', 'rol', 'first_name', 'last_name', 'foto_perfil']
+        fields = ['id', 'username', 'email', 'rol', 'first_name', 'last_name', 'foto_perfil', 'is_active']
         read_only_fields = ['id']
 
     def get_foto_perfil(self, obj):
@@ -145,7 +166,7 @@ Si no reconoces estos cambios, cambia tu contraseña de inmediato.
 
 ¡Gracias por usar Libris!
 """
-            send_email_async(subject, message, instance.email)
+            notify_user(instance, subject, message)
         
         return instance
 
@@ -155,7 +176,9 @@ Si no reconoces estos cambios, cambia tu contraseña de inmediato.
 class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
-        fields = ['username', 'rol']
+        # Incluimos username y email solo para lectura, así se muestran en list/retrieve
+        fields = ['id', 'username', 'email', 'rol', 'is_active']
+        read_only_fields = ['id', 'username', 'email']
     
     def validate_username(self, value):
         # Validar que el username no esté en uso por otro usuario
@@ -166,8 +189,12 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         old_username = instance.username
         old_rol = instance.rol
+        old_active = instance.is_active
+        old_email = instance.email
         new_username = validated_data.get('username', instance.username)
         new_rol = validated_data.get('rol', instance.rol)
+        new_active = validated_data.get('is_active', instance.is_active)
+        new_email = validated_data.get('email', instance.email)
         
         instance = super().update(instance, validated_data)
         
@@ -177,6 +204,11 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             changes.append(f"Nombre de usuario: {old_username} → {new_username}")
         if old_rol != new_rol:
             changes.append(f"Rol: {old_rol} → {new_rol}")
+        if old_email != new_email:
+            changes.append(f"Email: {old_email} → {new_email}")
+        if old_active != new_active:
+            estado = 'activada' if new_active else 'desactivada'
+            changes.append(f"Estado: {'activo' if old_active else 'inactivo'} → {'activo' if new_active else 'inactivo'}")
         
         if changes:
             subject = "🔔 Cambios en tu cuenta de Libris"
@@ -190,7 +222,26 @@ Si no reconoces estos cambios, contacta con el administrador.
 
 ¡Gracias por usar Libris!
 """
-            send_email_async(subject, message, instance.email)
+            notify_user(instance, subject, message)
+        
+        # Aviso específico cuando se desactiva/reactiva la cuenta
+        if old_active != new_active:
+            subject = "🚦 Estado de tu cuenta en Libris"
+            if new_active:
+                message = f"""Hola {new_username},
+
+Tu cuenta ha sido reactivada y puedes volver a iniciar sesión.
+
+Si no reconoces este cambio, comunícate con soporte.
+"""
+            else:
+                message = f"""Hola {new_username},
+
+Tu cuenta ha sido desactivada por un administrador. Si necesitas ayuda, comunícate con soporte.
+
+Intentar iniciar sesión mostrará un mensaje indicando que la cuenta está desactivada.
+"""
+            notify_user(instance, subject, message)
         
         return instance
 
@@ -555,6 +606,7 @@ class ComentariosSerializer(serializers.ModelSerializer):
             'libro',
             'manga',
             'novela',
+            'google_id_externo',
             'descripcion',
             'fecha',
             'titulo_material',
@@ -599,10 +651,9 @@ class ComentariosSerializer(serializers.ModelSerializer):
         user_username = comentario.user.username
         material_titulo = self.get_titulo_material(comentario)
         
-        # Enviar email de confirmación de comentario publicado
-        try:
-            subject = "✅ Tu comentario en Libris ha sido publicado"
-            message = f"""Hola {user_username},
+        # Enviar email y notificación in-app
+        subject = "✅ Tu comentario en Libris ha sido publicado"
+        message = f"""Hola {user_username},
 
 ¡Gracias por comentar en "{material_titulo}"!
 
@@ -610,9 +661,7 @@ Tu comentario ha sido publicado exitosamente y es visible para otros usuarios.
 
 ¡Esperamos que disfrutes interactuando con nuestra comunidad!
 """
-            send_email_async(subject, message, user_email)
-        except Exception as e:
-            print(f"⚠️ Error al enviar correo de confirmación de comentario: {e}")
+        notify_user(comentario.user, subject, message)
         
         return comentario
 
@@ -626,6 +675,8 @@ Tu comentario ha sido publicado exitosamente y es visible para otros usuarios.
             return obj.manga.titulo
         if obj.novela:
             return obj.novela.titulo
+        if obj.google_id_externo:
+            return f"Libro externo ({obj.google_id_externo})"
         return "Sin material"
 
     def get_tipo_material(self, obj):
@@ -635,6 +686,8 @@ Tu comentario ha sido publicado exitosamente y es visible para otros usuarios.
             return "manga"
         if obj.novela:
             return "novela"
+        if obj.google_id_externo:
+            return "libro"
         return "desconocido"
 
 
@@ -652,7 +705,8 @@ class CalificacionSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Calificacion
-        fields = ['id', 'user', 'nombre_usuario', 'libro', 'manga', 'novela', 'rating', 'fecha', 'material_info']
+        fields = ['id', 'user', 'nombre_usuario', 'libro', 'manga', 'novela', 
+                  'google_libro_id', 'google_libro_titulo', 'rating', 'fecha', 'material_info']
         read_only_fields = ['user', 'nombre_usuario', 'fecha']
     
     def get_material_info(self, obj):
@@ -662,6 +716,9 @@ class CalificacionSerializer(serializers.ModelSerializer):
             return {'tipo': 'manga', 'id': obj.manga.id, 'titulo': obj.manga.titulo}
         elif obj.novela:
             return {'tipo': 'novela', 'id': obj.novela.id, 'titulo': obj.novela.titulo}
+        elif obj.google_libro_id:
+            return {'tipo': 'libro', 'id': f'google_{obj.google_libro_id}', 
+                    'titulo': obj.google_libro_titulo, 'es_externo': True}
         return None
 
 
@@ -671,16 +728,40 @@ class FavoritoSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Favorito
-        fields = ['id', 'user', 'nombre_usuario', 'libro', 'manga', 'novela', 'fecha_agregado', 'material_info']
+        fields = ['id', 'user', 'nombre_usuario', 'libro', 'manga', 'novela', 'google_libro_id', 'google_libro_titulo', 'fecha_agregado', 'material_info']
         read_only_fields = ['user', 'nombre_usuario', 'fecha_agregado']
     
     def get_material_info(self, obj):
-        if obj.libro:
-            return {'tipo': 'libro', 'id': obj.libro.id, 'titulo': obj.libro.titulo}
+        if obj.google_libro_id:
+            # Para libros externos, intentar obtener la portada desde Google Books
+            try:
+                import requests
+                url = f"https://www.googleapis.com/books/v1/volumes/{obj.google_libro_id}"
+                response = requests.get(url, timeout=2)
+                if response.status_code == 200:
+                    data = response.json()
+                    image_links = data.get("volumeInfo", {}).get("imageLinks", {})
+                    imagen = image_links.get("large") or image_links.get("medium") or image_links.get("small") or image_links.get("thumbnail", "")
+                    return {
+                        'tipo': 'libro', 
+                        'id': f'google_{obj.google_libro_id}', 
+                        'titulo': obj.google_libro_titulo, 
+                        'imagen': imagen,
+                        'es_externo': True
+                    }
+            except:
+                pass
+            # Fallback sin imagen
+            return {'tipo': 'libro', 'id': f'google_{obj.google_libro_id}', 'titulo': obj.google_libro_titulo, 'es_externo': True}
+        elif obj.libro:
+            portada_url = obj.libro.portada.url if obj.libro.portada else None
+            return {'tipo': 'libro', 'id': obj.libro.id, 'titulo': obj.libro.titulo, 'imagen': portada_url, 'es_externo': False}
         elif obj.manga:
-            return {'tipo': 'manga', 'id': obj.manga.id, 'titulo': obj.manga.titulo}
+            portada_url = obj.manga.portada.url if obj.manga.portada else None
+            return {'tipo': 'manga', 'id': obj.manga.id, 'titulo': obj.manga.titulo, 'imagen': portada_url, 'es_externo': False}
         elif obj.novela:
-            return {'tipo': 'novela', 'id': obj.novela.id, 'titulo': obj.novela.titulo}
+            portada_url = obj.novela.portada.url if obj.novela.portada else None
+            return {'tipo': 'novela', 'id': obj.novela.id, 'titulo': obj.novela.titulo, 'imagen': portada_url, 'es_externo': False}
         return None
 
 

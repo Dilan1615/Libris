@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import apiClient from '../api/apiClient';
 import AdminTable from '../components/AdminTable';
+import Navbar from '../components/Navbar';
+import { getThemePalette } from '../styles/theme';
 import { getUsuarios, deleteUsuario, updateUsuario, getComentarios, deleteComentario, getAllLibros, deleteLibro, getAllMangas, deleteManga, getAllNovelas, deleteNovela } from '../api/adminService';
 
 const AdminDashboard = () => {
@@ -41,52 +43,131 @@ const AdminDashboard = () => {
   const [generosLibros, setGenerosLibros] = useState([]);
   const [generosMangas, setGenerosMangas] = useState([]);
   const [generosNovelas, setGenerosNovelas] = useState([]);
+  const [theme, setTheme] = useState('dark');
 
-  const palette = {
-    pageBg: '#0f172a',
-    cardBg: '#1e293b',
-    cardBorder: '#334155',
-    text: '#e5e7eb',
-    textLight: '#94a3b8',
-    primary: '#3b82f6',
-    accent: '#764ba2',
-    success: '#10b981',
-    error: '#ef4444',
-    inputBg: '#0f172a',
-    inputBorder: '#334155',
-    warning: '#f59e0b',
-  };
+  const palette = getThemePalette(theme);
+
+  const isMobile = window.innerWidth < 768;
+  const isTablet = window.innerWidth < 1024;
 
   const styles = {
-    page: { minHeight: '100vh', background: palette.pageBg, color: palette.text, padding: '0' },
-    header: { background: palette.cardBg, borderBottom: `1px solid ${palette.cardBorder}`, padding: '20px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    brand: { fontSize: '1.8rem', fontWeight: '800', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' },
-    headerActions: { display: 'flex', gap: '12px', alignItems: 'center' },
-    userInfo: { fontSize: '0.9rem', color: palette.textLight },
-    btn: { padding: '10px 18px', border: 'none', borderRadius: '10px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s ease', fontSize: '0.9rem' },
-    container: { maxWidth: '1400px', margin: '0 auto', padding: '40px 20px' },
-    mainTabs: { display: 'flex', gap: '8px', marginBottom: '32px', borderBottom: `2px solid ${palette.cardBorder}`, paddingBottom: '0', flexWrap: 'wrap' },
-    mainTab: { padding: '12px 24px', background: 'transparent', border: 'none', borderBottom: '3px solid transparent', color: palette.textLight, cursor: 'pointer', fontWeight: '600', fontSize: '1rem', transition: 'all 0.2s ease' },
+    container: { 
+      maxWidth: '1400px', 
+      margin: '0 auto', 
+      padding: isMobile ? '20px 12px' : '40px 20px',
+      color: palette.text
+    },
+    mainTabs: { 
+      display: 'flex', 
+      gap: isMobile ? '4px' : '8px', 
+      marginBottom: '32px', 
+      borderBottom: `2px solid ${palette.cardBorder}`, 
+      paddingBottom: '0', 
+      flexWrap: 'wrap',
+      overflowX: isMobile ? 'auto' : 'visible'
+    },
+    mainTab: { 
+      padding: isMobile ? '10px 12px' : '12px 24px', 
+      background: 'transparent', 
+      border: 'none', 
+      borderBottom: '3px solid transparent', 
+      color: palette.textLight, 
+      cursor: 'pointer', 
+      fontWeight: '600', 
+      fontSize: isMobile ? '0.85rem' : '1rem', 
+      transition: 'all 0.2s ease',
+      whiteSpace: 'nowrap'
+    },
     mainTabActive: { color: palette.primary, borderBottomColor: palette.primary },
-    subTabs: { display: 'flex', gap: '8px', marginBottom: '20px', paddingBottom: '8px', borderBottom: `1px solid ${palette.cardBorder}` },
-    subTab: { padding: '10px 16px', background: 'transparent', border: 'none', borderBottom: '2px solid transparent', color: palette.textLight, cursor: 'pointer', fontWeight: '600', fontSize: '0.95rem', transition: 'all 0.2s ease' },
+    subTabs: { 
+      display: 'flex', 
+      gap: isMobile ? '4px' : '8px', 
+      marginBottom: '20px', 
+      paddingBottom: '8px', 
+      borderBottom: `1px solid ${palette.cardBorder}`,
+      overflowX: isMobile ? 'auto' : 'visible'
+    },
+    subTab: { 
+      padding: isMobile ? '8px 10px' : '10px 16px', 
+      background: 'transparent', 
+      border: 'none', 
+      borderBottom: '2px solid transparent', 
+      color: palette.textLight, 
+      cursor: 'pointer', 
+      fontWeight: '600', 
+      fontSize: isMobile ? '0.8rem' : '0.95rem', 
+      transition: 'all 0.2s ease',
+      whiteSpace: 'nowrap'
+    },
     subTabActive: { color: palette.primary, borderBottomColor: palette.primary },
-    formCard: { background: palette.cardBg, border: `1px solid ${palette.cardBorder}`, borderRadius: '16px', padding: '32px', boxShadow: '0 10px 30px -10px rgba(0,0,0,0.3)' },
-    formTitle: { fontSize: '1.8rem', fontWeight: '700', marginBottom: '24px', color: palette.text },
-    formGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px' },
+    formCard: { 
+      background: palette.cardBg, 
+      border: `1px solid ${palette.cardBorder}`, 
+      borderRadius: '16px', 
+      padding: isMobile ? '16px' : '32px', 
+      boxShadow: '0 10px 30px -10px rgba(0,0,0,0.3)',
+      overflowX: 'auto'
+    },
+    formTitle: { 
+      fontSize: isMobile ? '1.4rem' : '1.8rem', 
+      fontWeight: '700', 
+      marginBottom: '24px', 
+      color: palette.text 
+    },
+    formGrid: { 
+      display: 'grid', 
+      gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(2, 1fr)' : 'repeat(2, 1fr)', 
+      gap: isMobile ? '12px' : '20px' 
+    },
     formGroup: { display: 'flex', flexDirection: 'column', gap: '8px' },
     formGroupFull: { gridColumn: '1 / -1' },
-    label: { fontWeight: '600', fontSize: '0.9rem', color: palette.text },
-    input: { padding: '12px 16px', background: palette.inputBg, border: `2px solid ${palette.inputBorder}`, borderRadius: '10px', color: palette.text, fontSize: '1rem', transition: 'all 0.2s ease' },
-    select: { padding: '12px 16px', background: palette.inputBg, border: `2px solid ${palette.inputBorder}`, borderRadius: '10px', color: palette.text, fontSize: '1rem', cursor: 'pointer' },
-    fileInput: { padding: '12px', background: palette.inputBg, border: `2px dashed ${palette.inputBorder}`, borderRadius: '10px', color: palette.textLight, fontSize: '0.9rem', cursor: 'pointer' },
-    submitBtn: { gridColumn: '1 / -1', padding: '14px 32px', background: palette.primary, color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '700', fontSize: '1rem', cursor: 'pointer', transition: 'all 0.2s ease', marginTop: '12px' },
+    label: { fontWeight: '600', fontSize: isMobile ? '0.85rem' : '0.9rem', color: palette.text },
+    input: { 
+      padding: isMobile ? '10px 12px' : '12px 16px', 
+      background: palette.inputBg, 
+      border: `2px solid ${palette.inputBorder}`, 
+      borderRadius: '10px', 
+      color: palette.text, 
+      fontSize: isMobile ? '0.95rem' : '1rem', 
+      transition: 'all 0.2s ease' 
+    },
+    select: { 
+      padding: isMobile ? '10px 12px' : '12px 16px', 
+      background: palette.inputBg, 
+      border: `2px solid ${palette.inputBorder}`, 
+      borderRadius: '10px', 
+      color: palette.text, 
+      fontSize: isMobile ? '0.95rem' : '1rem', 
+      cursor: 'pointer' 
+    },
+    fileInput: { 
+      padding: isMobile ? '10px' : '12px', 
+      background: palette.inputBg, 
+      border: `2px dashed ${palette.inputBorder}`, 
+      borderRadius: '10px', 
+      color: palette.textLight, 
+      fontSize: isMobile ? '0.8rem' : '0.9rem', 
+      cursor: 'pointer' 
+    },
+    submitBtn: { 
+      gridColumn: '1 / -1', 
+      padding: isMobile ? '12px 20px' : '14px 32px', 
+      background: palette.primary, 
+      color: '#fff', 
+      border: 'none', 
+      borderRadius: '12px', 
+      fontWeight: '700', 
+      fontSize: isMobile ? '0.95rem' : '1rem', 
+      cursor: 'pointer', 
+      transition: 'all 0.2s ease', 
+      marginTop: '12px' 
+    },
     message: { 
-      padding: '16px 24px', 
+      padding: isMobile ? '12px 16px' : '16px 24px', 
       borderRadius: '12px', 
       marginBottom: '20px', 
       fontWeight: '600',
-      fontSize: '1rem',
+      fontSize: isMobile ? '0.9rem' : '1rem',
       textAlign: 'center',
       boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
       animation: 'slideInDown 0.3s ease-out'
@@ -127,6 +208,14 @@ const AdminDashboard = () => {
   useEffect(() => {
     loadDataForSection();
   }, [section]);
+
+  // Auto-ocultar cualquier mensaje (notificación de la página) a los 3s
+  useEffect(() => {
+    if (message?.text) {
+      const t = setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [message?.text]);
 
   // Cargar opciones de géneros cuando estamos en crear
   useEffect(() => {
@@ -306,12 +395,12 @@ const AdminDashboard = () => {
 
   const handleEditUsuarioClick = (usuario) => {
     setEditingUser(usuario);
-    setEditUserForm({ username: usuario.username, rol: usuario.rol });
+    setEditUserForm({ rol: usuario.rol, is_active: usuario.is_active });
   };
 
   const handleEditUsuarioSave = async () => {
-    if (!editUserForm.username.trim() || !editUserForm.rol) {
-      setMessage({ type: 'error', text: '❌ Todos los campos son obligatorios' });
+    if (!editUserForm.rol) {
+      setMessage({ type: 'error', text: '❌ El rol es obligatorio' });
       return;
     }
     try {
@@ -321,7 +410,8 @@ const AdminDashboard = () => {
       );
       setUsuarios(updatedUsuarios);
       setEditingUser(null);
-      setMessage({ type: 'success', text: '✅ Usuario actualizado' });
+      const toggled = editingUser.is_active !== editUserForm.is_active;
+      setMessage({ type: 'success', text: toggled ? (editUserForm.is_active ? '✅ Usuario activado' : '✅ Usuario desactivado') : '✅ Usuario actualizado' });
     } catch (error) {
       setMessage({ type: 'error', text: `❌ Error: ${error.message}` });
     }
@@ -332,16 +422,9 @@ const AdminDashboard = () => {
   };
 
   return (
-    <div style={styles.page}>
-      <header style={styles.header}>
-        <div style={styles.brand}>📚 Libris Admin</div>
-        <div style={styles.headerActions}>
-          <span style={styles.userInfo}>👤 {user?.username}</span>
-          <button style={{ ...styles.btn, background: palette.accent, color: '#fff' }} onClick={() => navigate('/')}>🏠 Inicio</button>
-          <button style={{ ...styles.btn, background: palette.error, color: '#fff' }} onClick={() => { logout(); navigate('/login'); }}>🚪 Cerrar sesión</button>
-        </div>
-      </header>
-
+    <div style={{ minHeight: '100vh', background: palette.pageBg }}>
+      <Navbar theme={theme} setTheme={setTheme} palette={palette} />
+      
       <div style={styles.container}>
         <h1 style={{ fontSize: '2.5rem', fontWeight: '800', marginBottom: '12px' }}>Panel de Administración</h1>
         <p style={{ color: palette.textLight, marginBottom: '32px', fontSize: '1.1rem' }}>Gestiona usuarios, materiales y comentarios</p>
@@ -677,6 +760,7 @@ const AdminDashboard = () => {
                   { key: 'username', label: 'Usuario' },
                   { key: 'email', label: 'Email' },
                   { key: 'rol', label: 'Rol' },
+                  { key: 'is_active', label: 'Estado', render: (val) => val ? '✅ Activo' : '⛔ Inactivo' },
                 ]}
                 data={usuarios}
                 onDelete={handleDeleteUsuario}
@@ -690,26 +774,27 @@ const AdminDashboard = () => {
                 <h2 style={styles.formTitle}>✏️ Editar Usuario: {editingUser.username}</h2>
                 <div style={styles.formGrid}>
                   <div style={styles.formGroup}>
-                    <label style={styles.label}>Nombre de Usuario</label>
-                    <input 
-                      type="text" 
-                      value={editUserForm.username} 
-                      onChange={(e) => setEditUserForm({ ...editUserForm, username: e.target.value })} 
-                      style={styles.input} 
-                      placeholder="Nombre de usuario" 
-                    />
-                  </div>
-                  <div style={{ ...styles.formGroup, ...styles.formGroupFull }}>
                     <label style={styles.label}>Rol</label>
                     <select 
                       value={editUserForm.rol} 
                       onChange={(e) => setEditUserForm({ ...editUserForm, rol: e.target.value })} 
                       style={styles.select}
                     >
-                      <option value="">Seleccionar rol...</option>
                       <option value="USER">Usuario</option>
                       <option value="ADMIN">Admin</option>
                     </select>
+                  </div>
+                  <div style={{ ...styles.formGroup, display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <input
+                      id="toggle-active"
+                      type="checkbox"
+                      checked={editUserForm.is_active === true}
+                      onChange={(e) => setEditUserForm({ ...editUserForm, is_active: e.target.checked })}
+                      style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                    />
+                    <label htmlFor="toggle-active" style={{ ...styles.label, margin: 0, fontWeight: 'bold' }}>
+                      {editUserForm.is_active ? '✅ Cuenta Activa' : '⛔ Cuenta Desactivada'}
+                    </label>
                   </div>
                   <div style={{ ...styles.formGroup, ...styles.formGroupFull, display: 'flex', gap: '12px' }}>
                     <button 

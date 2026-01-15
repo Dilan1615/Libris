@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getRegistrosLectura } from '../api/materialService';
-import { estadisticasService } from '../api/ratingService';
+import { getRegistrosLectura, getMaterialById } from '../api/materialService';
+import { estadisticasService, favoritoService } from '../api/ratingService';
 import { updateProfile } from '../api/authService';
 import RegistroCard from '../components/RegistroCard';
+import MaterialCard from '../components/MaterialCard';
+import Navbar from '../components/Navbar';
+import { getThemePalette } from '../styles/theme';
 import { useNavigate } from 'react-router-dom';
 import '../styles/animations.css';
 
@@ -20,6 +23,11 @@ const ProfilePage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [editMessage, setEditMessage] = useState({ text: '', type: '' });
   const [avatarPreview, setAvatarPreview] = useState(null);
+  const [favoritos, setFavoritos] = useState([]);
+  const [isLoadingFavoritos, setIsLoadingFavoritos] = useState(false);
+  const [favoritosError, setFavoritosError] = useState('');
+  const [favoritosLoaded, setFavoritosLoaded] = useState(false);
+  const [activeSection, setActiveSection] = useState('historial');
   const navigate = useNavigate();
 
   // Función para cargar los registros de lectura
@@ -63,6 +71,68 @@ const ProfilePage = () => {
     }
   }, [user]);
 
+  // Cargar materiales favoritos del usuario con detalles para la tarjeta
+  const fetchFavoritos = useCallback(async () => {
+    if (!user) return;
+    setIsLoadingFavoritos(true);
+    setFavoritosError('');
+
+    try {
+      const res = await favoritoService.getMyFavorites();
+      const rawFavorites = Array.isArray(res) ? res : (res?.results || []);
+
+      const detailedFavorites = await Promise.all(rawFavorites.map(async (fav) => {
+        const materialType = fav.material_info?.tipo;
+        const materialId = fav.material_info?.id;
+
+        if (!materialType || !materialId) {
+          return null;
+        }
+
+        // Si es un libro externo y ya tiene imagen en material_info, usarla directamente
+        if (fav.material_info?.es_externo && fav.material_info?.imagen) {
+          return {
+            id: materialId,
+            tipo: materialType,
+            titulo: fav.material_info.titulo,
+            imagen: fav.material_info.imagen,
+            es_externo: true,
+            google_id: materialId.replace('google_', '')
+          };
+        }
+
+        try {
+          const material = await getMaterialById(materialType, materialId);
+          const normalized = {
+            ...material,
+            tipo: materialType,
+            imagen: material.imagen || material.portada || material.cover || fav.material_info?.imagen,
+            generos: material.generos || (material.genero ? [material.genero] : undefined),
+          };
+          return normalized;
+        } catch (err) {
+          console.error('⚠️ No se pudo cargar detalle del favorito:', materialType, materialId, err);
+          return {
+            id: materialId,
+            tipo: materialType,
+            titulo: fav.material_info?.titulo || 'Material sin título',
+            imagen: fav.material_info?.imagen,
+            es_externo: fav.material_info?.es_externo
+          };
+        }
+      }));
+
+      setFavoritos(detailedFavorites.filter(Boolean));
+      setFavoritosLoaded(true);
+    } catch (err) {
+      console.error('❌ Error al cargar favoritos:', err);
+      setFavoritosError('No se pudieron cargar tus favoritos.');
+      setFavoritos([]);
+    } finally {
+      setIsLoadingFavoritos(false);
+    }
+  }, [user]);
+
   useEffect(() => {
     if (!isAuthLoading && user) {
       fetchRegistros();
@@ -73,6 +143,13 @@ const ProfilePage = () => {
       setIsLoadingStats(false);
     }
   }, [isAuthLoading, user, fetchRegistros, fetchEstadisticas]);
+
+  // Cargar favoritos cuando el usuario abra la sección correspondiente
+  useEffect(() => {
+    if (activeSection === 'favoritos' && !favoritosLoaded) {
+      fetchFavoritos();
+    }
+  }, [activeSection, favoritosLoaded, fetchFavoritos]);
 
   const handleLogout = async () => {
     await logout();
@@ -138,44 +215,18 @@ const ProfilePage = () => {
   }
 
   // Paleta de colores
-  const palette = theme === 'light'
-    ? {
-        pageBg: '#f8fafc',
-        cardBg: 'rgba(255, 255, 255, 0.85)',
-        text: '#0f172a',
-        textLight: '#475569',
-        border: 'rgba(148, 163, 184, 0.3)',
-        primary: '#06b6d4',
-        success: '#22c55e',
-        accent: '#a855f7',
-      }
-    : {
-        pageBg: '#0b1224',
-        cardBg: 'rgba(17, 24, 39, 0.85)',
-        text: '#e2e8f0',
-        textLight: '#cbd5e1',
-        border: 'rgba(148, 163, 184, 0.2)',
-        primary: '#06b6d4',
-        success: '#22c55e',
-        accent: '#a855f7',
-      };
+  const palette = getThemePalette(theme);
 
   const styles = {
-    page: {
-      minHeight: '100vh',
-      background: palette.pageBg,
-      color: palette.text,
-      padding: '24px',
-      transition: 'all 0.3s ease',
-    },
     container: {
       maxWidth: '900px',
       margin: '0 auto',
       animation: 'slideIn 0.4s ease',
+      padding: '24px',
     },
     header: {
       background: palette.cardBg,
-      border: `1px solid ${palette.border}`,
+      border: `1px solid ${palette.cardBorder}`,
       borderRadius: '18px',
       padding: '28px',
       marginBottom: '28px',
@@ -247,11 +298,36 @@ const ProfilePage = () => {
     },
     section: {
       background: palette.cardBg,
-      border: `1px solid ${palette.border}`,
+      border: `1px solid ${palette.cardBorder}`,
       borderRadius: '18px',
       padding: '30px',
       boxShadow: '0 20px 40px -18px rgba(0, 0, 0, 0.35)',
       backdropFilter: 'blur(10px)',
+    },
+    tabSwitcher: {
+      display: 'flex',
+      gap: '10px',
+      alignItems: 'center',
+      margin: '26px 0 14px',
+    },
+    tabButton: {
+      flex: 1,
+      padding: '12px 16px',
+      borderRadius: '12px',
+      border: `1px solid ${palette.cardBorder}`,
+      background: palette.secondary,
+      color: palette.text,
+      fontWeight: '700',
+      cursor: 'pointer',
+      transition: 'all 0.25s ease',
+      boxShadow: '0 10px 25px -18px rgba(0,0,0,0.35)',
+    },
+    tabButtonActive: {
+      background: `linear-gradient(135deg, ${palette.primary} 0%, ${palette.accent} 100%)`,
+      color: '#fff',
+      border: 'none',
+      boxShadow: '0 14px 30px -18px rgba(59,130,246,0.6)',
+      transform: 'translateY(-1px)',
     },
     sectionTitle: {
       fontSize: '20px',
@@ -281,6 +357,16 @@ const ProfilePage = () => {
       color: palette.primary,
       textDecoration: 'none',
       fontWeight: '600',
+    },
+    cardsGrid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+      gap: '18px',
+    },
+    sectionHint: {
+      color: palette.textLight,
+      fontSize: '14px',
+      marginBottom: '10px',
     },
     loading: {
       display: 'flex',
@@ -380,7 +466,15 @@ const ProfilePage = () => {
   };
 
   return (
-    <div style={styles.page}>
+    <div style={{ minHeight: '100vh', background: palette.pageBg, color: palette.text }}>
+      <Navbar theme={theme} setTheme={setTheme} palette={{
+        ...palette,
+        navBg: palette.cardBg,
+        navBorder: palette.cardBorder,
+        cardBorder: palette.cardBorder,
+        secondary: palette.cardBg
+      }} />
+      
       <style>{`
         @keyframes slideIn {
           from {
@@ -402,14 +496,6 @@ const ProfilePage = () => {
         }
       `}</style>
 
-      <button
-        onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-        style={styles.themeToggle}
-        title={`Cambiar a tema ${theme === 'light' ? 'oscuro' : 'claro'}`}
-      >
-        {theme === 'light' ? '🌙' : '☀️'}
-      </button>
-
       <div style={styles.container}>
         {/* Mensajes de edición */}
         {editMessage.text && (
@@ -430,7 +516,7 @@ const ProfilePage = () => {
         {isEditingProfile && (
           <div style={{
             background: palette.cardBg,
-            border: `1px solid ${palette.border}`,
+            border: `1px solid ${palette.cardBorder}`,
             borderRadius: '18px',
             padding: '28px',
             marginBottom: '28px',
@@ -497,7 +583,7 @@ const ProfilePage = () => {
                     width: '100%',
                     padding: '10px 12px',
                     borderRadius: '8px',
-                    border: `1px solid ${palette.border}`,
+                    border: `1px solid ${palette.cardBorder}`,
                     background: palette.pageBg,
                     color: palette.text,
                     fontSize: '14px',
@@ -518,7 +604,7 @@ const ProfilePage = () => {
                     width: '100%',
                     padding: '10px 12px',
                     borderRadius: '8px',
-                    border: `1px solid ${palette.border}`,
+                    border: `1px solid ${palette.cardBorder}`,
                     background: palette.pageBg,
                     color: palette.text,
                     fontSize: '14px',
@@ -539,7 +625,7 @@ const ProfilePage = () => {
                     width: '100%',
                     padding: '10px 12px',
                     borderRadius: '8px',
-                    border: `1px solid ${palette.border}`,
+                    border: `1px solid ${palette.cardBorder}`,
                     background: palette.pageBg,
                     color: palette.text,
                     fontSize: '14px',
@@ -560,7 +646,7 @@ const ProfilePage = () => {
                     width: '100%',
                     padding: '10px 12px',
                     borderRadius: '8px',
-                    border: `1px solid ${palette.border}`,
+                    border: `1px solid ${palette.cardBorder}`,
                     background: palette.pageBg,
                     color: palette.text,
                     fontSize: '14px',
@@ -573,7 +659,7 @@ const ProfilePage = () => {
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               <button
                 onClick={handleCancelEdit}
-                style={{...styles.button, background: palette.secondary, color: palette.text, border: `2px solid ${palette.border}`, boxShadow: '0 4px 12px rgba(0,0,0,0.2)'}}
+                style={{...styles.button, background: palette.secondary, color: palette.text, border: `2px solid ${palette.cardBorder}`, boxShadow: '0 4px 12px rgba(0,0,0,0.2)'}}
                 disabled={isSaving}
               >
                 ❌ Cancelar
@@ -632,16 +718,6 @@ const ProfilePage = () => {
               aria-label="Editar perfil"
             >
               ✏️ Editar perfil
-            </button>
-            <a href="/" style={{ ...styles.button, ...styles.homeBtn, textDecoration: 'none', textAlign: 'center' }}>
-              📚 Volver al catálogo
-            </a>
-            <button
-              onClick={handleLogout}
-              style={{ ...styles.button, ...styles.logoutBtn }}
-              aria-label="Cerrar sesión"
-            >
-              🚪 Cerrar sesión
             </button>
           </div>
         </div>
@@ -711,21 +787,29 @@ const ProfilePage = () => {
               </div>
 
               {/* Total favoritos */}
-              <div style={{
-                background: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                borderRadius: '12px',
-                padding: '16px',
-                textAlign: 'center'
-              }}>
+              <button
+                type="button"
+                onClick={() => setActiveSection('favoritos')}
+                style={{
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  width: '100%',
+                  color: palette.text,
+                  boxShadow: '0 12px 28px -18px rgba(239,68,68,0.45)'
+                }}
+              >
                 <div style={{ fontSize: '28px', marginBottom: '8px' }}>❤️</div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ef4444' }}>
                   {estadisticas.total_favoritos || 0}
                 </div>
-                <div style={{ fontSize: '12px', color: palette.textLight, marginTop: '4px' }}>
-                  Favoritos
+                <div style={{ fontSize: '12px', color: palette.textLight, marginTop: '4px', fontWeight: 700 }}>
+                  Favoritos (clic para ver)
                 </div>
-              </div>
+              </button>
             </div>
           ) : (
             <div style={styles.emptyState}>
@@ -734,52 +818,121 @@ const ProfilePage = () => {
           )}
         </section>
 
-        {/* Sección de Historial */}
-        <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>📖 Mi Historial de Lectura</h2>
+        <div style={styles.tabSwitcher} aria-label="Navegación de secciones del perfil">
+          <button
+            type="button"
+            style={{
+              ...styles.tabButton,
+              ...(activeSection === 'historial' ? styles.tabButtonActive : {}),
+            }}
+            onClick={() => setActiveSection('historial')}
+            aria-pressed={activeSection === 'historial'}
+          >
+            📖 Historial
+          </button>
+          <button
+            type="button"
+            style={{
+              ...styles.tabButton,
+              ...(activeSection === 'favoritos' ? styles.tabButtonActive : {}),
+            }}
+            onClick={() => setActiveSection('favoritos')}
+            aria-pressed={activeSection === 'favoritos'}
+          >
+            ❤️ Favoritos
+          </button>
+        </div>
 
-          {error && (
-            <div style={styles.error} role="alert">
-              {error}
-            </div>
-          )}
+        {activeSection === 'favoritos' ? (
+          <section id="favoritos-section" style={styles.section}>
+            <h2 style={styles.sectionTitle}>❤️ Mis Favoritos</h2>
+            <p style={styles.sectionHint}>Aquí verás los materiales que guardaste tocando el corazón.</p>
 
-          {isLoading && (
-            <div style={styles.loading}>
-              <span style={{ marginRight: '10px', fontSize: '24px', animation: 'spin 1s linear infinite' }}>
-                ⏳
-              </span>
-              Cargando historial...
-            </div>
-          )}
+            {favoritosError && (
+              <div style={styles.error} role="alert">
+                {favoritosError}
+              </div>
+            )}
 
-          {!isLoading && registros.length === 0 && (
-            <div style={styles.emptyState}>
-              <div style={styles.emptyIcon}>📚</div>
-              <p style={styles.emptyText}>Aún no tienes materiales registrados</p>
-              <p style={{ color: palette.textLight, fontSize: '14px', marginBottom: '20px' }}>
-                Comienza a explorar y guardar tu progreso de lectura
-              </p>
-              <a href="/" style={styles.emptyLink}>
-                Ir al catálogo →
-              </a>
-            </div>
-          )}
+            {isLoadingFavoritos ? (
+              <div style={styles.loading}>
+                <span style={{ marginRight: '10px', fontSize: '24px', animation: 'spin 1s linear infinite' }}>
+                  ⏳
+                </span>
+                Cargando favoritos...
+              </div>
+            ) : favoritos.length === 0 ? (
+              <div style={styles.emptyState}>
+                <div style={styles.emptyIcon}>🤍</div>
+                <p style={styles.emptyText}>Aún no tienes favoritos guardados</p>
+                <p style={{ color: palette.textLight, fontSize: '14px', marginBottom: '20px' }}>
+                  Explora el catálogo y pulsa "Guardar" para añadirlos aquí.
+                </p>
+                <a href="/" style={styles.emptyLink}>
+                  Ir al catálogo →
+                </a>
+              </div>
+            ) : (
+              <div style={styles.cardsGrid}>
+                {favoritos.map((fav) => (
+                  <MaterialCard
+                    key={`${fav.tipo}-${fav.id}`}
+                    material={fav}
+                    tipo={fav.tipo}
+                    onCreateRegistro={() => {}}
+                    onOpenComment={() => {}}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        ) : (
+          <section style={styles.section}>
+            <h2 style={styles.sectionTitle}>📖 Mi Historial de Lectura</h2>
 
-          {!isLoading && registros.length > 0 && (
-            <div style={styles.registrosList}>
-              {registros.map((registro) => (
-                <RegistroCard
-                  key={registro.id}
-                  registro={registro}
-                  onUpdate={handleRegistroChange}
-                  onDelete={handleRegistroChange}
-                  theme={theme}
-                />
-              ))}
-            </div>
-          )}
-        </section>
+            {error && (
+              <div style={styles.error} role="alert">
+                {error}
+              </div>
+            )}
+
+            {isLoading && (
+              <div style={styles.loading}>
+                <span style={{ marginRight: '10px', fontSize: '24px', animation: 'spin 1s linear infinite' }}>
+                  ⏳
+                </span>
+                Cargando historial...
+              </div>
+            )}
+
+            {!isLoading && registros.length === 0 && (
+              <div style={styles.emptyState}>
+                <div style={styles.emptyIcon}>📚</div>
+                <p style={styles.emptyText}>Aún no tienes materiales registrados</p>
+                <p style={{ color: palette.textLight, fontSize: '14px', marginBottom: '20px' }}>
+                  Comienza a explorar y guardar tu progreso de lectura
+                </p>
+                <a href="/" style={styles.emptyLink}>
+                  Ir al catálogo →
+                </a>
+              </div>
+            )}
+
+            {!isLoading && registros.length > 0 && (
+              <div style={styles.registrosList}>
+                {registros.map((registro) => (
+                  <RegistroCard
+                    key={registro.id}
+                    registro={registro}
+                    onUpdate={handleRegistroChange}
+                    onDelete={handleRegistroChange}
+                    theme={theme}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </div>
     </div>
   );
