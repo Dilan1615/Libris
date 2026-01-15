@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.utils import timezone
 
 class Genero(models.TextChoices):
     FICCION = 'FICCION', 'FICCION'
@@ -181,6 +182,10 @@ class Calificacion(models.Model):
     manga = models.ForeignKey(Manga, null=True, blank=True, on_delete=models.CASCADE, related_name='calificaciones')
     novela = models.ForeignKey(Novela, null=True, blank=True, on_delete=models.CASCADE, related_name='calificaciones')
     
+    # Para libros externos de Google Books
+    google_libro_id = models.CharField(max_length=255, null=True, blank=True, help_text='ID del libro externo de Google Books')
+    google_libro_titulo = models.CharField(max_length=500, null=True, blank=True, help_text='Título del libro externo')
+    
     rating = models.IntegerField(choices=RATING_CHOICES, help_text='Calificación de 1 a 5 estrellas')
     fecha = models.DateTimeField(auto_now=True)
     
@@ -190,6 +195,7 @@ class Calificacion(models.Model):
             ('user', 'libro'),
             ('user', 'manga'),
             ('user', 'novela'),
+            ('user', 'google_libro_id'),
         ]
     
     def __str__(self):
@@ -204,6 +210,10 @@ class Favorito(models.Model):
     manga = models.ForeignKey(Manga, null=True, blank=True, on_delete=models.CASCADE, related_name='favoritos_usuarios')
     novela = models.ForeignKey(Novela, null=True, blank=True, on_delete=models.CASCADE, related_name='favoritos_usuarios')
     
+    # Para libros externos de Google Books
+    google_libro_id = models.CharField(max_length=255, null=True, blank=True)
+    google_libro_titulo = models.CharField(max_length=500, null=True, blank=True)  # Guardar título para referencia
+    
     fecha_agregado = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -212,9 +222,12 @@ class Favorito(models.Model):
             ('user', 'libro'),
             ('user', 'manga'),
             ('user', 'novela'),
+            ('user', 'google_libro_id'),
         ]
     
     def __str__(self):
+        if self.google_libro_id:
+            return f"{self.user.username} - {self.google_libro_titulo} (Google Books)"
         material = self.libro or self.manga or self.novela
         return f"{self.user.username} - {material.titulo}"
     
@@ -224,6 +237,9 @@ class Comentarios(models.Model):
     libro = models.ForeignKey(Libro, null=True, blank=True, on_delete=models.CASCADE)
     manga = models.ForeignKey(Manga, null=True, blank=True, on_delete=models.CASCADE)
     novela = models.ForeignKey(Novela, null=True, blank=True, on_delete=models.CASCADE)
+    
+    # Para comentarios en libros externos de Google Books
+    google_id_externo = models.CharField(max_length=255, null=True, blank=True, default=None)
 
     descripcion = models.TextField()
     fecha = models.DateTimeField(auto_now=True)
@@ -232,3 +248,18 @@ class Comentarios(models.Model):
     def __str__(self):
         username = self.user.username if self.user else '[Usuario eliminado]'
         return f"{username}: {self.descripcion[:30]}"
+
+
+# Modelo simple de notificaciones in-app
+class Notification(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='notifications')
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    created_at = models.DateTimeField(default=timezone.now)
+    is_read = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Notif to {self.user.username}: {self.title}"

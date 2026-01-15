@@ -84,11 +84,18 @@ const DetalleMaterialPage = () => {
 
     setEnviandoComentario(true);
     try {
-      const materialKey = tipo === 'libro' ? 'libro' : tipo === 'manga' ? 'manga' : 'novela';
-      await createComentario({
-        [materialKey]: material.id,
-        descripcion: nuevoComentario
-      });
+      let payload = { descripcion: nuevoComentario };
+      
+      // Para libros externos, usar google_id_externo
+      if (material.es_externo && material.google_id) {
+        payload.google_id_externo = material.google_id;
+      } else {
+        // Para libros locales, usar la clave del tipo
+        const materialKey = tipo === 'libro' ? 'libro' : tipo === 'manga' ? 'manga' : 'novela';
+        payload[materialKey] = material.id;
+      }
+      
+      await createComentario(payload);
       
       // Recargar comentarios
       const data = await getComentariosByMaterial(tipo, id);
@@ -113,7 +120,13 @@ const DetalleMaterialPage = () => {
       return;
     }
 
-    // Crear registro de lectura
+    // Para libros externos de Google, abrir en nueva pestaña
+    if (material.es_externo && material.preview_link) {
+      window.open(material.preview_link, '_blank');
+      return;
+    }
+
+    // Para libros locales, crear registro de lectura
     const materialKey = tipo === 'libro' ? 'libro' : tipo === 'manga' ? 'manga' : 'novela';
     const payload = {
       estado: 'PENDIENTE',
@@ -158,11 +171,19 @@ const DetalleMaterialPage = () => {
         }
       } else {
         // Crear nueva calificación
-        const materialKey = tipo === 'libro' ? 'libro' : tipo === 'manga' ? 'manga' : 'novela';
-        await calificacionService.rateaterial({
-          rating: newRating,
-          [materialKey]: material.id
-        });
+        let payload = { rating: newRating };
+        
+        if (material.es_externo && material.google_id) {
+          // Para libros externos de Google Books
+          payload.google_libro_id = material.google_id;
+          payload.google_libro_titulo = material.titulo;
+        } else {
+          // Para materiales locales
+          const materialKey = tipo === 'libro' ? 'libro' : tipo === 'manga' ? 'manga' : 'novela';
+          payload[materialKey] = material.id;
+        }
+        
+        await calificacionService.rateaterial(payload);
       }
       setUserRating(newRating);
       setCommentNotice({ message: '⭐ Calificación guardada', type: 'success' });
@@ -343,7 +364,7 @@ const DetalleMaterialPage = () => {
             marginBottom: '24px',
             padding: '10px 16px',
             borderRadius: '10px',
-            border: 'none',
+            border: `1px solid ${palette.border}`,
             background: palette.cardBg,
             color: palette.text,
             cursor: 'pointer',
@@ -351,7 +372,6 @@ const DetalleMaterialPage = () => {
             alignItems: 'center',
             gap: '8px',
             fontWeight: '600',
-            border: `1px solid ${palette.border}`,
           }}
         >
           ← Volver al catálogo
@@ -495,8 +515,8 @@ const DetalleMaterialPage = () => {
               )}
 
               {/* Botones de acción */}
-              <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-                {material.contenido_pdf_url ? (
+              <div style={{ display: 'flex', gap: '12px', marginTop: '24px', flexWrap: 'wrap' }}>
+                {material.contenido_pdf_url || material.preview_link ? (
                   <button
                     onClick={handleEmpezarALeer}
                     style={{
@@ -511,8 +531,10 @@ const DetalleMaterialPage = () => {
                       boxShadow: '0 10px 25px -8px rgba(0,0,0,0.45)',
                       transition: 'all 0.3s ease',
                     }}
+                    onMouseEnter={(e) => e.target.style.transform = 'translateY(-2px)'}
+                    onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
                   >
-                    📖 Empieza a leer
+                    {material.es_externo ? '🌐 Leer en Google Books' : '📖 Empieza a leer'}
                   </button>
                 ) : (
                   <div style={{

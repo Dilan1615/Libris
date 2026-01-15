@@ -20,8 +20,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 from django.db.models import Avg, Count
 
-from .models import CustomUser,Libro,Manga,Novela, RegistroLectura,MaterialGeneral, Comentarios, GeneroTag, Calificacion, Favorito   
-from .serializers import RegisterSerializer, UserProfileSerializer, UserUpdateSerializer, LibroSerializer,NovelaSerializer,MangaSerializer,RegistroLecturaSerializer, MaterialGeneralSerializer, ComentariosSerializer, GeneroTagSerializer, CalificacionSerializer, FavoritoSerializer, EstadisticasUsuarioSerializer 
+from .models import CustomUser,Libro,Manga,Novela, RegistroLectura,MaterialGeneral, Comentarios, GeneroTag, Calificacion, Favorito, Notification   
+from .serializers import RegisterSerializer, UserProfileSerializer, UserUpdateSerializer, LibroSerializer,NovelaSerializer,MangaSerializer,RegistroLecturaSerializer, MaterialGeneralSerializer, ComentariosSerializer, GeneroTagSerializer, CalificacionSerializer, FavoritoSerializer, EstadisticasUsuarioSerializer, NotificationSerializer 
 # -----------------------------
 # Raíz: mensaje/redirect
 # -----------------------------
@@ -62,6 +62,11 @@ class LoginView(TokenObtainPairView):
         password = request.data.get('password')
         user = CustomUser.objects.filter(username=username).first()
         if user and user.check_password(password):
+            if not user.is_active:
+                return Response({
+                    "detail": "Cuenta desactivada. Comunícate con soporte.",
+                    "code": "inactive_account"
+                }, status=status.HTTP_403_FORBIDDEN)
             refresh = RefreshToken.for_user(user)
             response = Response({
                 "success": True,
@@ -179,7 +184,7 @@ class IsAdminCustom(permissions.BasePermission):
 # -----------------------------
 
 class LibroViewSet(viewsets.ModelViewSet):
-    queryset = Libro.objects.all()
+    queryset = Libro.objects.all().prefetch_related('generos')
     serializer_class = LibroSerializer
     authentication_classes = [CookiesJWTAuthentication]
     parser_classes = (MultiPartParser, FormParser, JSONParser)
@@ -198,11 +203,11 @@ class LibroViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [AllowAny()]
-        return [IsAdminCustom()]  
+        return [IsAdminCustom()]
 
 
 class MangaViewSet(viewsets.ModelViewSet):
-    queryset = Manga.objects.all()
+    queryset = Manga.objects.all().prefetch_related('generos')
     serializer_class = MangaSerializer
     authentication_classes = [CookiesJWTAuthentication]
     parser_classes = (MultiPartParser, FormParser, JSONParser)
@@ -219,7 +224,7 @@ class MangaViewSet(viewsets.ModelViewSet):
 
 
 class NovelaViewSet(viewsets.ModelViewSet):
-    queryset = Novela.objects.all()
+    queryset = Novela.objects.all().prefetch_related('generos')
     serializer_class = NovelaSerializer
     authentication_classes = [CookiesJWTAuthentication]
     parser_classes = (MultiPartParser, FormParser, JSONParser)
@@ -307,6 +312,7 @@ class ComentarioViewSet(viewsets.ModelViewSet):
         libro_id = self.request.query_params.get('libro')
         manga_id = self.request.query_params.get('manga')
         novela_id = self.request.query_params.get('novela')
+        google_libro_id = self.request.query_params.get('google_libro_id')
 
         if libro_id:
             qs = qs.filter(libro_id=libro_id)
@@ -314,20 +320,23 @@ class ComentarioViewSet(viewsets.ModelViewSet):
             qs = qs.filter(manga_id=manga_id)
         if novela_id:
             qs = qs.filter(novela_id=novela_id)
+        if google_libro_id:
+            qs = qs.filter(google_id_externo=google_libro_id)
 
         return qs
 
     def perform_create(self, serializer):
-        # Validar que SOLO un material sea enviado
+        # Validar que SOLO un material sea enviado (local o externo)
         libro = serializer.validated_data.get('libro')
         manga = serializer.validated_data.get('manga')
         novela = serializer.validated_data.get('novela')
+        google_id_externo = serializer.validated_data.get('google_id_externo')
 
-        materiales = [libro, manga, novela]
+        materiales = [libro, manga, novela, google_id_externo]
         materiales_elegidos = [m for m in materiales if m is not None]
 
         if len(materiales_elegidos) == 0:
-            raise ValidationError("Debes seleccionar libro, manga o novela.")
+            raise ValidationError("Debes seleccionar libro, manga, novela o libro externo.")
         if len(materiales_elegidos) > 1:
             raise ValidationError("Solo puedes comentar un tipo de material a la vez.")
         # Asigna automaticamente el usuario actual
@@ -425,8 +434,12 @@ class GeneroTagViewSet(viewsets.ReadOnlyModelViewSet):
 
 def obtener_libros(request):
     try:
+        # Obtener parámetro de búsqueda (default: python)
+        query = request.GET.get('q', 'python')
+        max_results = request.GET.get('maxResults', '40')
+        
         # URL de la API externa
-        url = "https://www.googleapis.com/books/v1/volumes?q=python&maxResults=10"
+        url = f"https://www.googleapis.com/books/v1/volumes?q={query}&maxResults={max_results}&printType=books"
 
         # Realizar la petición
         respuesta = requests.get(url)
@@ -440,18 +453,28 @@ def obtener_libros(request):
             # Crear un ID único basado en Google ID + prefijo
             google_id = item.get("id", "")
             
+            # Obtener primer género disponible
+            categories = info.get("categories", ["General"])
+            genero = categories[0] if categories else "General"
+            
+            # Obtener enlace de preview si existe
+            preview_link = item.get("accessInfo", {}).get("webReaderLink", "")
+            
             libros.append({
                 "id": f"google_{google_id}",  # ID único para identificar como externo
                 "titulo": info.get("title", "Sin título"),
                 "autor": ", ".join(info.get("authors", ["Autor desconocido"])),
                 "anio_publicacion": int(info.get("publishedDate", "0000")[:4]) or 0,
-                "genero": "Programación",  # Búsqueda fija por python
+                "genero": genero,
                 "editorial": info.get("publisher", "Editorial desconocida"),
-                "isbn": info.get("industryIdentifiers", [{}])[0].get("identifier", ""),
+                "isbn": info.get("industryIdentifiers", [{}])[0].get("identifier", "") if info.get("industryIdentifiers") else "",
                 "descripcion": info.get("description", ""),
                 "imagen": info.get("imageLinks", {}).get("thumbnail", ""),
                 "es_externo": True,  # Marcar como externo
-                "tipo": "libro"
+                "tipo": "libro",
+                "preview_link": preview_link,  # Para leer en el navegador
+                "pages": info.get("pageCount", 0),  # Número de páginas
+                "google_id": google_id  # ID de Google para referencia
             })
 
         # Devolver los datos en formato JSON con estructura similar a DRF
@@ -460,15 +483,70 @@ def obtener_libros(request):
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
+
+def obtener_libro_externo(request, google_id):
+    """Obtener detalles de un libro específico de Google Books API"""
+    try:
+        # URL de la API externa para obtener un libro específico
+        url = f"https://www.googleapis.com/books/v1/volumes/{google_id}"
+        respuesta = requests.get(url)
+        
+        if respuesta.status_code != 200:
+            return JsonResponse({"error": "Libro no encontrado"}, status=404)
+        
+        item = respuesta.json()
+        info = item.get("volumeInfo", {})
+        
+        # Obtener categorías
+        categories = info.get("categories", ["General"])
+        genero = categories[0] if categories else "General"
+        
+        # Obtener enlace de preview
+        preview_link = item.get("accessInfo", {}).get("webReaderLink", "")
+        
+        # Obtener imageLinks con diferentes opciones de resolución
+        image_links = info.get("imageLinks", {})
+        imagen = image_links.get("large") or image_links.get("medium") or image_links.get("small") or image_links.get("thumbnail", "")
+        
+        libro = {
+            "id": f"google_{google_id}",
+            "titulo": info.get("title", "Sin título"),
+            "autor": ", ".join(info.get("authors", ["Autor desconocido"])),
+            "anio_publicacion": int(info.get("publishedDate", "0000")[:4]) or 0,
+            "genero": genero,
+            "editorial": info.get("publisher", "Editorial desconocida"),
+            "isbn": info.get("industryIdentifiers", [{}])[0].get("identifier", "") if info.get("industryIdentifiers") else "",
+            "descripcion": info.get("description", ""),
+            "imagen": imagen,
+            "es_externo": True,
+            "tipo": "libro",
+            "preview_link": preview_link,
+            "pages": info.get("pageCount", 0),
+            "google_id": google_id,
+            "language": info.get("language", "es"),
+            "maturity_rating": info.get("maturityRating", "NOT_MATURE")
+        }
+        
+        return JsonResponse(libro, status=200)
+        
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
 # ============================================
 # ViewSet para Usuarios (Admin)
 # ============================================
 class UsuariosViewSet(viewsets.ModelViewSet):
-    queryset = CustomUser.objects.all()
+    queryset = CustomUser.objects.all().only('id', 'username', 'email', 'rol', 'is_active')
     permission_classes = [IsAuthenticated]
     authentication_classes = [CookiesJWTAuthentication]
     parser_classes = (MultiPartParser, FormParser, JSONParser)
     serializer_class = UserProfileSerializer
+    pagination_class = None  # Deshabilitar paginación por defecto para lista rápida
+
+    def get_serializer_class(self):
+        if self.action in ['update', 'partial_update', 'list', 'retrieve']:
+            return UserUpdateSerializer
+        return super().get_serializer_class()
 
     def get_permissions(self):
         # Permitir que cualquier usuario autenticado acceda a sus propios datos en `me` y `estadisticas`
@@ -601,6 +679,20 @@ class CalificacionViewSet(viewsets.ModelViewSet):
         return Calificacion.objects.filter(user=self.request.user).select_related('user')
     
     def perform_create(self, serializer):
+        # Validar que SOLO un material sea enviado (local o externo)
+        libro = serializer.validated_data.get('libro')
+        manga = serializer.validated_data.get('manga')
+        novela = serializer.validated_data.get('novela')
+        google_libro_id = serializer.validated_data.get('google_libro_id')
+
+        materiales = [libro, manga, novela, google_libro_id]
+        materiales_elegidos = [m for m in materiales if m is not None]
+
+        if len(materiales_elegidos) == 0:
+            raise ValidationError("Debes seleccionar un libro, manga, novela o libro externo.")
+        if len(materiales_elegidos) > 1:
+            raise ValidationError("Solo puedes calificar un tipo de material a la vez.")
+        
         # Asignar automáticamente el usuario actual
         serializer.save(user=self.request.user)
     
@@ -628,16 +720,17 @@ class FavoritoViewSet(viewsets.ModelViewSet):
         return Favorito.objects.filter(user=self.request.user).select_related('user', 'libro', 'manga', 'novela')
     
     def perform_create(self, serializer):
-        # Validar que SOLO un material sea enviado
+        # Validar que SOLO un material sea enviado (local o externo)
         libro = serializer.validated_data.get('libro')
         manga = serializer.validated_data.get('manga')
         novela = serializer.validated_data.get('novela')
+        google_libro_id = serializer.validated_data.get('google_libro_id')
 
-        materiales = [libro, manga, novela]
+        materiales = [libro, manga, novela, google_libro_id]
         materiales_elegidos = [m for m in materiales if m is not None]
 
         if len(materiales_elegidos) == 0:
-            raise ValidationError("Debes seleccionar un libro, manga o novela.")
+            raise ValidationError("Debes seleccionar un libro, manga, novela o libro externo.")
         if len(materiales_elegidos) > 1:
             raise ValidationError("Solo puedes agregar un tipo de material a favoritos a la vez.")
         
@@ -660,4 +753,28 @@ class FavoritoViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         return super().destroy(request, *args, **kwargs)
+
+
+class NotificationViewSet(viewsets.ModelViewSet):
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [CookiesJWTAuthentication]
+
+    def get_queryset(self):
+        return Notification.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def mark_read(self, request, pk=None):
+        notif = self.get_object()
+        notif.is_read = True
+        notif.save()
+        return Response({'status': 'read'})
+
+    @action(detail=False, methods=['post'])
+    def mark_all_read(self, request):
+        Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+        return Response({'status': 'all_read'})
 

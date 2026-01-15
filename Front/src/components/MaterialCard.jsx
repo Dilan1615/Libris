@@ -36,18 +36,21 @@ const MaterialCard = ({ material, tipo, onCreateRegistro, onOpenComment }) => {
         );
         setUserRating(myRating?.rating || 0);
 
-        // Cargar favoritos del usuario con logging
+        // Cargar favoritos del usuario
         const favorites = await favoritoService.getMyFavorites();
-        console.log('📋 Favoritos cargados:', favorites.results);
-        console.log('🔍 Buscando material ID:', materialId, 'Tipo:', typeof materialId);
         
-        const isFav = favorites.results?.some(f => {
-          const favId = f.material_info?.id;
-          console.log('  Comparando con favorito ID:', favId, 'Tipo:', typeof favId, 'Match:', favId === materialId || String(favId) === String(materialId));
-          return String(favId) === String(materialId);
-        });
+        let isFav = false;
         
-        console.log(`✅ Material ${materialId} está en favoritos:`, isFav);
+        // Para libros externos, buscar por google_id
+        if (material?.es_externo && material?.google_id) {
+          isFav = favorites.results?.some(f => f.google_libro_id === material.google_id);
+        } else {
+          // Para libros locales, buscar por material_info.id
+          isFav = favorites.results?.some(f => {
+            return String(f.material_info?.id) === String(materialId);
+          });
+        }
+        
         setIsFavorited(!!isFav);
       } catch (error) {
         console.error('Error cargando datos del usuario:', error);
@@ -154,11 +157,22 @@ const MaterialCard = ({ material, tipo, onCreateRegistro, onOpenComment }) => {
         console.log('✅ Favorito eliminado, estado actualizado a false');
       } else {
         // No existe, agregar
-        const materialKey = tipo === 'libro' ? 'libro' : tipo === 'manga' ? 'manga' : 'novela';
+        let payload;
+        
+        // Para libros externos, usar google_libro_id
+        if (material?.es_externo && material?.google_id) {
+          payload = {
+            google_libro_id: material.google_id,
+            google_libro_titulo: material.titulo
+          };
+        } else {
+          // Para libros locales
+          const materialKey = tipo === 'libro' ? 'libro' : tipo === 'manga' ? 'manga' : 'novela';
+          payload = { [materialKey]: materialId };
+        }
+        
         try {
-          const result = await favoritoService.addFavorite({
-            [materialKey]: materialId
-          });
+          const result = await favoritoService.addFavorite(payload);
           console.log('✅ Favorito agregado exitosamente:', result);
           setIsFavorited(true);
           setCardNotice({ message: '❤️ Agregado a favoritos', type: 'success' });

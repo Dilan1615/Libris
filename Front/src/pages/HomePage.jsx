@@ -61,7 +61,7 @@ const HomePage = () => {
           getLibros({ page: 1, page_size: 10 }),
           getMangas({ page: 1, page_size: 10 }),
           getNovelas({ page: 1, page_size: 10 }),
-          getLibrosExternos(),
+          getLibrosExternos({ maxResults: 40, q: 'python' }),
         ]);
 
         console.log('📦 [HomePage] Resultados recibidos:', results);
